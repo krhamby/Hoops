@@ -8,12 +8,12 @@ export const PLAYERS: Player[] = [
   { id: "doug-christie-raptors-1990s", name: "Doug Christie", franchiseId: "raptors", decade: "1990s", positions: ["SG", "SF"], stats: { pts: 14.5, reb: 4.5, ast: 4.0, stl: 2.2, blk: 0.6 }, years: "1996–1999", accolades: "Steals machine" },
   { id: "marcus-camby-raptors-1990s", name: "Marcus Camby", franchiseId: "raptors", decade: "1990s", positions: ["C", "PF"], stats: { pts: 13.5, reb: 6.5, ast: 1.5, stl: 1.0, blk: 2.5 }, years: "1996–1998", accolades: "All-Rookie shot blocker" },
   { id: "charles-oakley-raptors-1990s", name: "Charles Oakley", franchiseId: "raptors", decade: "1990s", positions: ["PF"], stats: { pts: 7.0, reb: 7.5, ast: 2.5, stl: 0.9, blk: 0.3 }, years: "1998–1999", accolades: "Veteran muscle" },
-  { id: "dell-curry-raptors-1990s", name: "Dell Curry", franchiseId: "raptors", decade: "1990s", positions: ["SG"], stats: { pts: 9.5, reb: 2.0, ast: 1.5, stl: 0.6, blk: 0.2 }, years: "1999", accolades: "Vet sharpshooter" },
+  { id: "dell-curry-raptors-1990s", name: "Dell Curry", franchiseId: "raptors", decade: "1990s", positions: ["SG"], stats: { pts: 9.5, reb: 2.0, ast: 1.5, stl: 0.6, blk: 0.2 }, years: "1998–1999", accolades: "Vet sharpshooter" },
 
   // ---------------- 2000s ----------------
   { id: "vince-carter-raptors-2000s", name: "Vince Carter", franchiseId: "raptors", decade: "2000s", positions: ["SG", "SF"], stats: { pts: 24.5, reb: 5.5, ast: 4.0, stl: 1.3, blk: 0.9 }, years: "2000–2004", accolades: "Dunk contest ’00 · Vinsanity" },
   { id: "chris-bosh-raptors-2000s", name: "Chris Bosh", franchiseId: "raptors", decade: "2000s", positions: ["PF", "C"], stats: { pts: 20.0, reb: 9.5, ast: 2.2, stl: 0.8, blk: 1.2 }, years: "2003–2009", accolades: "4× All-Star · CB4" },
-  { id: "tracy-mcgrady-raptors-2000s", name: "Tracy McGrady", franchiseId: "raptors", decade: "2000s", positions: ["SG", "SF"], stats: { pts: 15.4, reb: 6.3, ast: 3.3, stl: 1.1, blk: 1.9 }, years: "2000", accolades: "Breakout before the leap" },
+  { id: "tracy-mcgrady-raptors-2000s", name: "Tracy McGrady", franchiseId: "raptors", decade: "2000s", positions: ["SG", "SF"], stats: { pts: 15.4, reb: 6.3, ast: 3.3, stl: 1.1, blk: 1.9 }, years: "1999–2000", accolades: "Breakout before the leap" },
   { id: "morris-peterson-raptors-2000s", name: "Morris Peterson", franchiseId: "raptors", decade: "2000s", positions: ["SF", "SG"], stats: { pts: 11.5, reb: 3.5, ast: 2.0, stl: 1.0, blk: 0.3 }, years: "2000–2007", accolades: "Iron-man fan favorite" },
   { id: "antonio-davis-raptors-2000s", name: "Antonio Davis", franchiseId: "raptors", decade: "2000s", positions: ["PF", "C"], stats: { pts: 12.5, reb: 9.0, ast: 1.5, stl: 0.5, blk: 1.5 }, years: "2000–2003", accolades: "All-Star ’01" },
   { id: "jalen-rose-raptors-2000s", name: "Jalen Rose", franchiseId: "raptors", decade: "2000s", positions: ["SG", "SF"], stats: { pts: 15.5, reb: 3.5, ast: 3.5, stl: 0.8, blk: 0.3 }, years: "2003–2006", accolades: "Veteran shot creator" },
@@ -29,7 +29,7 @@ export const PLAYERS: Player[] = [
   { id: "serge-ibaka-raptors-2010s", name: "Serge Ibaka", franchiseId: "raptors", decade: "2010s", positions: ["PF", "C"], stats: { pts: 14.0, reb: 7.0, ast: 1.3, stl: 0.5, blk: 1.4 }, years: "2017–2019", accolades: "Champ ’19 · Mafuzzy chef" },
   { id: "fred-vanvleet-raptors-2010s", name: "Fred VanVleet", franchiseId: "raptors", decade: "2010s", positions: ["PG", "SG"], stats: { pts: 9.5, reb: 2.5, ast: 3.5, stl: 0.9, blk: 0.3 }, years: "2016–2019", accolades: "Bet on yourself · champ" },
   { id: "amir-johnson-raptors-2010s", name: "Amir Johnson", franchiseId: "raptors", decade: "2010s", positions: ["PF", "C"], stats: { pts: 9.5, reb: 6.5, ast: 1.4, stl: 0.7, blk: 1.1 }, years: "2010–2015", accolades: "Beloved energy big" },
-  { id: "marc-gasol-raptors-2010s", name: "Marc Gasol", franchiseId: "raptors", decade: "2010s", positions: ["C"], stats: { pts: 9.0, reb: 6.5, ast: 4.0, stl: 0.9, blk: 0.9 }, years: "2019", accolades: "Champ ’19 hub" },
+  { id: "marc-gasol-raptors-2010s", name: "Marc Gasol", franchiseId: "raptors", decade: "2010s", positions: ["C"], stats: { pts: 9.0, reb: 6.5, ast: 4.0, stl: 0.9, blk: 0.9 }, years: "2018–2019", accolades: "Champ ’19 hub" },
   { id: "demarre-carroll-raptors-2010s", name: "DeMarre Carroll", franchiseId: "raptors", decade: "2010s", positions: ["SF"], stats: { pts: 9.5, reb: 4.0, ast: 1.2, stl: 1.0, blk: 0.3 }, years: "2015–2017", accolades: "3-and-D wing" },
 
   // ---------------- 2020s ----------------

@@ -27,7 +27,7 @@ export const PLAYERS: Player[] = [
   { id: "jayson-williams-nets-1990s", name: "Jayson Williams", franchiseId: "nets", decade: "1990s", positions: ["PF", "C"], stats: { pts: 9.5, reb: 9.0, ast: 1.0, stl: 0.6, blk: 0.6 }, years: "1992–1999", accolades: "All-Star rebound hound" },
   { id: "kerry-kittles-nets-1990s", name: "Kerry Kittles", franchiseId: "nets", decade: "1990s", positions: ["SG"], stats: { pts: 15.0, reb: 4.0, ast: 2.5, stl: 1.7, blk: 0.4 }, years: "1996–1999", accolades: "Sleek two-way guard" },
   { id: "keith-van-horn-nets-1990s", name: "Keith Van Horn", franchiseId: "nets", decade: "1990s", positions: ["PF", "SF"], stats: { pts: 20.0, reb: 7.5, ast: 1.7, stl: 0.9, blk: 0.6 }, years: "1997–1999", accolades: "All-Rookie stretch four" },
-  { id: "stephon-marbury-nets-1990s", name: "Stephon Marbury", franchiseId: "nets", decade: "1990s", positions: ["PG"], stats: { pts: 23.0, reb: 3.0, ast: 8.5, stl: 1.2, blk: 0.1 }, years: "1999", accolades: "Starbury comes home" },
+  { id: "stephon-marbury-nets-1990s", name: "Stephon Marbury", franchiseId: "nets", decade: "1990s", positions: ["PG"], stats: { pts: 23.0, reb: 3.0, ast: 8.5, stl: 1.2, blk: 0.1 }, years: "1998–1999", accolades: "Starbury comes home" },
   { id: "chris-morris-nets-1990s", name: "Chris Morris", franchiseId: "nets", decade: "1990s", positions: ["SF"], stats: { pts: 12.5, reb: 5.5, ast: 1.5, stl: 1.2, blk: 0.6 }, years: "1990–1995", accolades: "Athletic forward" },
 
   // ---------------- 2000s ----------------

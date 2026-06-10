@@ -73,7 +73,7 @@ export const PLAYERS: Player[] = [
   { id: "jj-redick-sixers-2010s", name: "JJ Redick", franchiseId: "sixers", decade: "2010s", positions: ["SG"], stats: { pts: 17.5, reb: 2.5, ast: 2.7, stl: 0.5, blk: 0.1 }, years: "2017–2019", accolades: "Movement-shooting maestro" },
   { id: "thaddeus-young-sixers-2010s", name: "Thaddeus Young", franchiseId: "sixers", decade: "2010s", positions: ["PF", "SF"], stats: { pts: 13.5, reb: 5.5, ast: 1.8, stl: 1.5, blk: 0.4 }, years: "2010–2014", accolades: "Steady glue forward" },
   { id: "lou-williams-sixers-2010s", name: "Lou Williams", franchiseId: "sixers", decade: "2010s", positions: ["SG", "PG"], stats: { pts: 14.0, reb: 2.5, ast: 3.5, stl: 0.8, blk: 0.2 }, years: "2010–2012", accolades: "Bench bucket-getter" },
-  { id: "tobias-harris-sixers-2010s", name: "Tobias Harris", franchiseId: "sixers", decade: "2010s", positions: ["PF", "SF"], stats: { pts: 18.5, reb: 7.5, ast: 2.8, stl: 0.6, blk: 0.5 }, years: "2019", accolades: "Versatile scoring forward" },
+  { id: "tobias-harris-sixers-2010s", name: "Tobias Harris", franchiseId: "sixers", decade: "2010s", positions: ["PF", "SF"], stats: { pts: 18.5, reb: 7.5, ast: 2.8, stl: 0.6, blk: 0.5 }, years: "2018–2019", accolades: "Versatile scoring forward" },
 
   // ---------------- 2020s ----------------
   { id: "joel-embiid-sixers-2020s", name: "Joel Embiid", franchiseId: "sixers", decade: "2020s", positions: ["C"], stats: { pts: 30.5, reb: 10.8, ast: 4.2, stl: 1.0, blk: 1.6 }, years: "2020–2026", accolades: "MVP ’23 · 2× scoring champ" },

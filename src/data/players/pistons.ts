@@ -41,7 +41,7 @@ export const PLAYERS: Player[] = [
   { id: "rick-mahorn-pistons-1980s", name: "Rick Mahorn", franchiseId: "pistons", decade: "1980s", positions: ["PF", "C"], stats: { pts: 9.0, reb: 7.0, ast: 1.0, stl: 0.5, blk: 0.7 }, years: "1985–1989", accolades: "Bad Boys enforcer" },
   { id: "kelly-tripucka-pistons-1980s", name: "Kelly Tripucka", franchiseId: "pistons", decade: "1980s", positions: ["SF"], stats: { pts: 21.5, reb: 4.5, ast: 3.0, stl: 1.0, blk: 0.2 }, years: "1981–1986", accolades: "2× All-Star scorer" },
   { id: "john-long-pistons-1980s", name: "John Long", franchiseId: "pistons", decade: "1980s", positions: ["SG"], stats: { pts: 14.5, reb: 3.0, ast: 2.5, stl: 0.9, blk: 0.2 }, years: "1980–1986", accolades: "Mid-range pro" },
-  { id: "mark-aguirre-pistons-1980s", name: "Mark Aguirre", franchiseId: "pistons", decade: "1980s", positions: ["SF"], stats: { pts: 15.5, reb: 4.5, ast: 2.5, stl: 0.6, blk: 0.3 }, years: "1989", accolades: "Champ ’89 addition" },
+  { id: "mark-aguirre-pistons-1980s", name: "Mark Aguirre", franchiseId: "pistons", decade: "1980s", positions: ["SF"], stats: { pts: 15.5, reb: 4.5, ast: 2.5, stl: 0.6, blk: 0.3 }, years: "1988–1989", accolades: "Champ ’89 addition" },
 
   // ---------------- 1990s ----------------
   { id: "isiah-thomas-pistons-1990s", name: "Isiah Thomas", franchiseId: "pistons", decade: "1990s", positions: ["PG"], stats: { pts: 17.5, reb: 3.0, ast: 7.5, stl: 1.5, blk: 0.2 }, years: "1990–1994", accolades: "FMVP ’90 · back-to-back" },
