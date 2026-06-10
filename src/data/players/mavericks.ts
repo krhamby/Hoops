@@ -1,0 +1,58 @@
+import type { Player } from "../../types";
+
+export const PLAYERS: Player[] = [
+  // ---------------- 1980s ----------------
+  { id: "mark-aguirre-mavericks-1980s", name: "Mark Aguirre", franchiseId: "mavericks", decade: "1980s", positions: ["SF"], stats: { pts: 24.6, reb: 5.7, ast: 4.2, stl: 0.9, blk: 0.3 }, years: "1981–1989", accolades: "3× All-Star · franchise scorer" },
+  { id: "rolando-blackman-mavericks-1980s", name: "Rolando Blackman", franchiseId: "mavericks", decade: "1980s", positions: ["SG"], stats: { pts: 19.2, reb: 3.6, ast: 3.2, stl: 0.8, blk: 0.3 }, years: "1981–1989", accolades: "4× All-Star · smooth scorer" },
+  { id: "derek-harper-mavericks-1980s", name: "Derek Harper", franchiseId: "mavericks", decade: "1980s", positions: ["PG"], stats: { pts: 13.5, reb: 2.6, ast: 6.0, stl: 1.9, blk: 0.2 }, years: "1983–1989", accolades: "2× All-Defense · steady floor general" },
+  { id: "brad-davis-mavericks-1980s", name: "Brad Davis", franchiseId: "mavericks", decade: "1980s", positions: ["PG"], stats: { pts: 10.2, reb: 2.0, ast: 5.6, stl: 1.0, blk: 0.2 }, years: "1980–1989", accolades: "Original Mav · retired number" },
+  { id: "sam-perkins-mavericks-1980s", name: "Sam Perkins", franchiseId: "mavericks", decade: "1980s", positions: ["PF", "C"], stats: { pts: 14.4, reb: 8.0, ast: 1.6, stl: 0.9, blk: 0.9 }, years: "1984–1989", accolades: "Stretch big before his time" },
+  { id: "roy-tarpley-mavericks-1980s", name: "Roy Tarpley", franchiseId: "mavericks", decade: "1980s", positions: ["PF", "C"], stats: { pts: 12.7, reb: 10.0, ast: 0.9, stl: 1.2, blk: 1.1 }, years: "1986–1989", accolades: "Sixth Man of the Year 1988" },
+  { id: "james-donaldson-mavericks-1980s", name: "James Donaldson", franchiseId: "mavericks", decade: "1980s", positions: ["C"], stats: { pts: 8.9, reb: 9.6, ast: 0.9, stl: 0.5, blk: 1.3 }, years: "1985–1989", accolades: "All-Star 1988 · paint anchor" },
+  { id: "jay-vincent-mavericks-1980s", name: "Jay Vincent", franchiseId: "mavericks", decade: "1980s", positions: ["SF", "PF"], stats: { pts: 15.7, reb: 5.5, ast: 1.9, stl: 0.7, blk: 0.3 }, years: "1981–1986", accolades: "All-Rookie scorer" },
+
+  // ---------------- 1990s ----------------
+  { id: "rolando-blackman-mavericks-1990s", name: "Rolando Blackman", franchiseId: "mavericks", decade: "1990s", positions: ["SG"], stats: { pts: 19.0, reb: 3.0, ast: 3.4, stl: 0.8, blk: 0.2 }, years: "1990–1992", accolades: "Veteran bucket-getter" },
+  { id: "derek-harper-mavericks-1990s", name: "Derek Harper", franchiseId: "mavericks", decade: "1990s", positions: ["PG"], stats: { pts: 16.5, reb: 2.6, ast: 6.7, stl: 1.9, blk: 0.2 }, years: "1990–1994", accolades: "Two-way point guard" },
+  { id: "jim-jackson-mavericks-1990s", name: "Jim Jackson", franchiseId: "mavericks", decade: "1990s", positions: ["SG", "SF"], stats: { pts: 19.0, reb: 4.8, ast: 3.9, stl: 1.0, blk: 0.3 }, years: "1992–1997", accolades: "Three J's wing scorer" },
+  { id: "jamal-mashburn-mavericks-1990s", name: "Jamal Mashburn", franchiseId: "mavericks", decade: "1990s", positions: ["SF"], stats: { pts: 21.0, reb: 4.4, ast: 3.6, stl: 1.0, blk: 0.2 }, years: "1993–1997", accolades: "Monster Mash · 24 ppg in '95" },
+  { id: "jason-kidd-mavericks-1990s", name: "Jason Kidd", franchiseId: "mavericks", decade: "1990s", positions: ["PG"], stats: { pts: 12.7, reb: 6.0, ast: 9.1, stl: 2.0, blk: 0.4 }, years: "1994–1996", accolades: "Co-Rookie of the Year 1995" },
+  { id: "michael-finley-mavericks-1990s", name: "Michael Finley", franchiseId: "mavericks", decade: "1990s", positions: ["SG", "SF"], stats: { pts: 19.6, reb: 5.0, ast: 4.0, stl: 1.2, blk: 0.4 }, years: "1996–1999", accolades: "Iron-man wing scorer" },
+  { id: "dirk-nowitzki-mavericks-1990s", name: "Dirk Nowitzki", franchiseId: "mavericks", decade: "1990s", positions: ["PF"], stats: { pts: 8.2, reb: 3.4, ast: 1.0, stl: 0.6, blk: 0.6 }, years: "1998–1999", accolades: "Raw German rookie · future MVP" },
+  { id: "steve-nash-mavericks-1990s", name: "Steve Nash", franchiseId: "mavericks", decade: "1990s", positions: ["PG"], stats: { pts: 7.9, reb: 2.5, ast: 4.9, stl: 0.7, blk: 0.1 }, years: "1998–1999", accolades: "Young playmaker finding his game" },
+  { id: "shawn-bradley-mavericks-1990s", name: "Shawn Bradley", franchiseId: "mavericks", decade: "1990s", positions: ["C"], stats: { pts: 9.5, reb: 7.8, ast: 0.8, stl: 0.7, blk: 3.2 }, years: "1997–1999", accolades: "7'6\" shot-swatter" },
+
+  // ---------------- 2000s ----------------
+  { id: "dirk-nowitzki-mavericks-2000s", name: "Dirk Nowitzki", franchiseId: "mavericks", decade: "2000s", positions: ["PF"], stats: { pts: 23.6, reb: 8.9, ast: 3.0, stl: 1.0, blk: 1.0 }, years: "2000–2009", accolades: "2007 MVP · one-legged fadeaway" },
+  { id: "steve-nash-mavericks-2000s", name: "Steve Nash", franchiseId: "mavericks", decade: "2000s", positions: ["PG"], stats: { pts: 16.5, reb: 3.0, ast: 7.6, stl: 0.9, blk: 0.1 }, years: "2000–2004", accolades: "All-Star engine of Nellie-ball" },
+  { id: "michael-finley-mavericks-2000s", name: "Michael Finley", franchiseId: "mavericks", decade: "2000s", positions: ["SG", "SF"], stats: { pts: 20.0, reb: 5.2, ast: 3.7, stl: 1.2, blk: 0.4 }, years: "2000–2005", accolades: "2× All-Star · Big Three wing" },
+  { id: "josh-howard-mavericks-2000s", name: "Josh Howard", franchiseId: "mavericks", decade: "2000s", positions: ["SF"], stats: { pts: 15.0, reb: 6.0, ast: 1.7, stl: 1.2, blk: 0.6 }, years: "2003–2009", accolades: "All-Star 2007 · two-way wing" },
+  { id: "jason-terry-mavericks-2000s", name: "Jason Terry", franchiseId: "mavericks", decade: "2000s", positions: ["PG", "SG"], stats: { pts: 16.7, reb: 2.4, ast: 4.6, stl: 1.2, blk: 0.3 }, years: "2004–2009", accolades: "The Jet · microwave scorer" },
+  { id: "jerry-stackhouse-mavericks-2000s", name: "Jerry Stackhouse", franchiseId: "mavericks", decade: "2000s", positions: ["SG", "SF"], stats: { pts: 13.4, reb: 3.0, ast: 2.8, stl: 0.7, blk: 0.3 }, years: "2004–2009", accolades: "Bench bucket-getter" },
+  { id: "devin-harris-mavericks-2000s", name: "Devin Harris", franchiseId: "mavericks", decade: "2000s", positions: ["PG"], stats: { pts: 10.3, reb: 2.4, ast: 3.6, stl: 1.1, blk: 0.1 }, years: "2004–2008", accolades: "Speedy young guard" },
+  { id: "jason-kidd-mavericks-2000s", name: "Jason Kidd", franchiseId: "mavericks", decade: "2000s", positions: ["PG"], stats: { pts: 9.9, reb: 6.2, ast: 9.0, stl: 1.9, blk: 0.4 }, years: "2008–2009", accolades: "Hall of Fame floor general returns" },
+  { id: "erick-dampier-mavericks-2000s", name: "Erick Dampier", franchiseId: "mavericks", decade: "2000s", positions: ["C"], stats: { pts: 7.0, reb: 7.6, ast: 0.6, stl: 0.4, blk: 1.3 }, years: "2004–2009", accolades: "Interior muscle" },
+
+  // ---------------- 2010s ----------------
+  { id: "dirk-nowitzki-mavericks-2010s", name: "Dirk Nowitzki", franchiseId: "mavericks", decade: "2010s", positions: ["PF"], stats: { pts: 19.0, reb: 6.8, ast: 2.4, stl: 0.7, blk: 0.7 }, years: "2010–2019", accolades: "2011 Finals MVP · loyal legend" },
+  { id: "jason-kidd-mavericks-2010s", name: "Jason Kidd", franchiseId: "mavericks", decade: "2010s", positions: ["PG"], stats: { pts: 8.4, reb: 4.4, ast: 8.0, stl: 1.7, blk: 0.4 }, years: "2010–2012", accolades: "2011 champion conductor" },
+  { id: "jason-terry-mavericks-2010s", name: "Jason Terry", franchiseId: "mavericks", decade: "2010s", positions: ["SG"], stats: { pts: 15.6, reb: 2.0, ast: 3.8, stl: 1.1, blk: 0.2 }, years: "2010–2012", accolades: "2011 Finals dagger man" },
+  { id: "tyson-chandler-mavericks-2010s", name: "Tyson Chandler", franchiseId: "mavericks", decade: "2010s", positions: ["C"], stats: { pts: 10.0, reb: 10.0, ast: 0.5, stl: 0.6, blk: 1.2 }, years: "2010–2011", accolades: "2011 title defensive anchor" },
+  { id: "shawn-marion-mavericks-2010s", name: "Shawn Marion", franchiseId: "mavericks", decade: "2010s", positions: ["SF", "PF"], stats: { pts: 11.4, reb: 6.8, ast: 1.9, stl: 1.1, blk: 0.7 }, years: "2010–2014", accolades: "The Matrix · do-it-all defender" },
+  { id: "monta-ellis-mavericks-2010s", name: "Monta Ellis", franchiseId: "mavericks", decade: "2010s", positions: ["SG"], stats: { pts: 19.0, reb: 3.0, ast: 4.7, stl: 1.7, blk: 0.3 }, years: "2013–2015", accolades: "Monta have it all" },
+  { id: "chandler-parsons-mavericks-2010s", name: "Chandler Parsons", franchiseId: "mavericks", decade: "2010s", positions: ["SF"], stats: { pts: 14.7, reb: 4.8, ast: 2.6, stl: 0.9, blk: 0.3 }, years: "2014–2016", accolades: "Smooth playmaking wing" },
+  { id: "harrison-barnes-mavericks-2010s", name: "Harrison Barnes", franchiseId: "mavericks", decade: "2010s", positions: ["SF", "PF"], stats: { pts: 18.3, reb: 4.6, ast: 1.7, stl: 0.7, blk: 0.2 }, years: "2016–2019", accolades: "Go-to wing in rebuild years" },
+  { id: "luka-doncic-mavericks-2010s", name: "Luka Doncic", franchiseId: "mavericks", decade: "2010s", positions: ["PG", "SG"], stats: { pts: 24.4, reb: 8.5, ast: 7.0, stl: 1.1, blk: 0.3 }, years: "2018–2019", accolades: "2019 Rookie of the Year" },
+  { id: "wesley-matthews-mavericks-2010s", name: "Wesley Matthews", franchiseId: "mavericks", decade: "2010s", positions: ["SG"], stats: { pts: 13.0, reb: 3.1, ast: 2.4, stl: 1.0, blk: 0.2 }, years: "2015–2019", accolades: "3-and-D iron man" },
+
+  // ---------------- 2020s ----------------
+  { id: "luka-doncic-mavericks-2020s", name: "Luka Doncic", franchiseId: "mavericks", decade: "2020s", positions: ["PG", "SG"], stats: { pts: 30.5, reb: 8.9, ast: 8.6, stl: 1.2, blk: 0.5 }, years: "2020–2025", accolades: "5× All-NBA · 2024 Finals run" },
+  { id: "kyrie-irving-mavericks-2020s", name: "Kyrie Irving", franchiseId: "mavericks", decade: "2020s", positions: ["PG", "SG"], stats: { pts: 25.0, reb: 4.8, ast: 5.0, stl: 1.2, blk: 0.5 }, years: "2023–2026", accolades: "Handle wizard · All-Star" },
+  { id: "jalen-brunson-mavericks-2020s", name: "Jalen Brunson", franchiseId: "mavericks", decade: "2020s", positions: ["PG"], stats: { pts: 14.6, reb: 3.5, ast: 4.2, stl: 0.8, blk: 0.1 }, years: "2020–2022", accolades: "Playoff riser before NY" },
+  { id: "tim-hardaway-jr-mavericks-2020s", name: "Tim Hardaway Jr.", franchiseId: "mavericks", decade: "2020s", positions: ["SG", "SF"], stats: { pts: 15.6, reb: 3.4, ast: 1.9, stl: 0.7, blk: 0.2 }, years: "2020–2024", accolades: "High-volume sniper" },
+  { id: "dorian-finney-smith-mavericks-2020s", name: "Dorian Finney-Smith", franchiseId: "mavericks", decade: "2020s", positions: ["SF", "PF"], stats: { pts: 9.8, reb: 5.0, ast: 1.6, stl: 1.0, blk: 0.4 }, years: "2020–2023", accolades: "Glue-guy defender" },
+  { id: "pj-washington-mavericks-2020s", name: "P.J. Washington", franchiseId: "mavericks", decade: "2020s", positions: ["PF"], stats: { pts: 12.5, reb: 6.5, ast: 1.9, stl: 1.1, blk: 0.8 }, years: "2024–2026", accolades: "2024 Finals run forward" },
+  { id: "dereck-lively-ii-mavericks-2020s", name: "Dereck Lively II", franchiseId: "mavericks", decade: "2020s", positions: ["C"], stats: { pts: 8.4, reb: 7.4, ast: 1.2, stl: 0.6, blk: 1.5 }, years: "2023–2026", accolades: "Lob threat · rim protector" },
+  { id: "anthony-davis-mavericks-2020s", name: "Anthony Davis", franchiseId: "mavericks", decade: "2020s", positions: ["PF", "C"], stats: { pts: 21.0, reb: 10.0, ast: 3.5, stl: 1.2, blk: 2.0 }, years: "2025–2026", accolades: "Blockbuster-trade big" },
+  { id: "klay-thompson-mavericks-2020s", name: "Klay Thompson", franchiseId: "mavericks", decade: "2020s", positions: ["SG", "SF"], stats: { pts: 14.0, reb: 3.4, ast: 2.0, stl: 0.7, blk: 0.4 }, years: "2024–2026", accolades: "4× champ sniper · new chapter" },
+];
