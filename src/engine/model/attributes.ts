@@ -146,9 +146,9 @@ export function deriveAttributes(p: Player): PlayerAttributes {
       ? 0.045 * (1 - clamp01((usage - 0.1) / 0.2))
       : 0;
   const scoringEfficiency = clamp(
-    0.5 + 0.04 * ctx.threeEnv + 0.0024 * adjPts + bigBonus,
+    0.49 + 0.035 * ctx.threeEnv + 0.0048 * adjPts + bigBonus,
     0.46,
-    0.66,
+    0.67,
   );
 
   // Shot diet. ZERO threes before the 1980 line; afterwards the rate
@@ -186,8 +186,8 @@ export function deriveAttributes(p: Player): PlayerAttributes {
   const defRebRate = adjReb * DREB_POS[pos];
 
   // Defense.
-  const rimProtection = clamp01(adjBlk * RIMPROT_POS[pos] * 0.5 + 0.02);
-  const perimeterDefense = clamp01(adjStl * PERIM_POS[pos] * 0.55 + 0.02);
+  const rimProtection = clamp01(adjBlk * RIMPROT_POS[pos] + 0.02);
+  const perimeterDefense = clamp01(adjStl * PERIM_POS[pos] + 0.02);
 
   // Free throws: rim pressure + load draw fouls; touch by position
   // plus a scorer bonus (great scorers are great FT shooters).

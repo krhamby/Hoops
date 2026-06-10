@@ -109,13 +109,13 @@ export function lineupFromAttributes(
     (s, a) => s + a.threeRate * (a.threeSkill / 0.36),
     0,
   );
-  const spacing = clamp(0.93 + 0.085 * shooterScore, 0.93, 1.1);
+  const spacing = clamp(0.95 + 0.055 * shooterScore, 0.95, 1.07);
 
   // ---- playmaking network ----
   // Team creation lifts off-ball finishers; assist-starved lineups
   // pay an iso tax (everything is self-created against set defenses).
   const teamPlay = attrs.reduce((s, a) => s + a.playmaking, 0);
-  const passBoost = clamp((teamPlay - 11) * 0.0024, -0.024, 0.026);
+  const passBoost = clamp((teamPlay - 11) * 0.0028, -0.028, 0.032);
 
   // ---- ball security & pressure ----
   const teamTOBase = clamp(
@@ -124,7 +124,7 @@ export function lineupFromAttributes(
     0.18,
   );
   const perimSum = attrs.reduce((s, a) => s + a.perimeterDefense, 0);
-  const ballPressure = clamp(0.85 + 0.14 * perimSum, 0.85, 1.3);
+  const ballPressure = clamp(0.82 + 0.16 * perimSum, 0.82, 1.35);
 
   // ---- defense by zone ----
   // Rim protection is anchor-driven: the best protector sets the
@@ -134,9 +134,9 @@ export function lineupFromAttributes(
     0.8 * rims[0] + 0.4 * rims[1] + 0.15 * ((rims[2] + rims[3] + rims[4]) / 3),
   );
   const perimDef = clamp01(perimSum / 2.4);
-  const oppRimMod = 1.07 - 0.2 * rimDef; // elite anchor ≈ 0.87
-  const oppMidMod = 1.04 - 0.07 * rimDef - 0.06 * perimDef;
-  const oppThreeMod = 1.05 - 0.12 * perimDef; // closeouts ≈ 0.93
+  const oppRimMod = 1.09 - 0.24 * rimDef; // elite anchor ≈ 0.87
+  const oppMidMod = 1.05 - 0.09 * rimDef - 0.07 * perimDef;
+  const oppThreeMod = 1.06 - 0.14 * perimDef; // closeouts ≈ 0.92
 
   // ---- rebounding ----
   const oSum = attrs.reduce((s, a) => s + a.offRebRate, 0);

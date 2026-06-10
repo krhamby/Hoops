@@ -1,30 +1,34 @@
-// Head-to-head best-of-7 series between two drafted rosters.
-// Deterministic per seed. Both sides draw their own per-game form
-// noise, so swapping a/b with the same seed carries no slot bias.
+// Head-to-head best-of-7: thin orchestrator over the possession
+// model. Playoff modifiers: pace -4%, star usage +8% (handled in
+// game.ts). Home court follows the 2-2-1-1-1 pattern and is granted
+// to the higher-rated team regardless of slot, so swapping a/b with
+// the same seed carries no slot bias. Deterministic per seed.
 
 import type { Roster, SeriesGame, SeriesResult } from "../types";
-import { createRng, randInt, type RNG } from "./rng";
+import { createRng } from "./rng";
+import { buildLineup } from "./model/lineup";
+import { simulateGame } from "./model/game";
 import { teamStrength } from "./strength";
 
-// Smaller temperature than the season: the better team usually wins,
-// but upsets happen in close matchups.
-const TEMPERATURE = 5;
-const FORM_NOISE_SD = 3.5;
-const SCORE_NOISE_SD = 5.5;
+// Home games for the home-court holder under 2-2-1-1-1.
+const HOLDER_HOME = [true, true, false, false, true, false, true];
 
-const logistic = (x: number) => 1 / (1 + Math.exp(-x));
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 
-/** Standard normal via Box-Muller (always consumes exactly 2 draws). */
-function gauss(rng: RNG): number {
-  const u = Math.max(rng(), 1e-12);
-  const v = rng();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+/** Squeeze raw sim scores into the playoff 90-135 display band
+ *  while preserving the winner and (mostly) the margin. */
+function fitScores(winner: number, loser: number): [number, number] {
+  const w = clamp(winner, 92, 135);
+  const l = clamp(w - (winner - loser), 90, w - 1);
+  return [w, l];
 }
 
 export function simulateSeries(a: Roster, b: Roster, seed: string): SeriesResult {
-  const ratingA = teamStrength(a);
-  const ratingB = teamStrength(b);
+  const la = buildLineup(a);
+  const lb = buildLineup(b);
+  // Higher overall earns home court (slot-independent on swap).
+  const holder: "a" | "b" =
+    teamStrength(b).overall > teamStrength(a).overall ? "b" : "a";
   const rng = createRng(`${seed}:series`);
 
   const games: SeriesGame[] = [];
@@ -34,26 +38,18 @@ export function simulateSeries(a: Roster, b: Roster, seed: string): SeriesResult
 
   while (aWins < 4 && bWins < 4) {
     gameNo++;
-    // Nightly form for BOTH sides.
-    const formA = gauss(rng) * FORM_NOISE_SD;
-    const formB = gauss(rng) * FORM_NOISE_SD;
-    const pA = logistic(
-      (ratingA.overall + formA - (ratingB.overall + formB)) / TEMPERATURE,
-    );
-    const aTakesIt = rng() < pA;
+    const holderHome = HOLDER_HOME[gameNo - 1];
+    const home: "a" | "b" =
+      holderHome === (holder === "a") ? "a" : "b";
 
-    // Plausible playoff scores in the 90-135 band.
-    const winnerOffense = aTakesIt ? ratingA.offense : ratingB.offense;
-    const winnerScore = clamp(
-      Math.round(winnerOffense + gauss(rng) * SCORE_NOISE_SD),
-      95,
-      135,
-    );
-    const margin = randInt(rng, 1, 15);
-    const loserScore = clamp(winnerScore - margin, 90, winnerScore - 1);
+    const raw = simulateGame(la, lb, rng, { home, playoff: true });
+    const aTakesIt = raw.aScore > raw.bScore;
+    const [winScore, loseScore] = aTakesIt
+      ? fitScores(raw.aScore, raw.bScore)
+      : fitScores(raw.bScore, raw.aScore);
 
-    const aScore = aTakesIt ? winnerScore : loserScore;
-    const bScore = aTakesIt ? loserScore : winnerScore;
+    const aScore = aTakesIt ? winScore : loseScore;
+    const bScore = aTakesIt ? loseScore : winScore;
     if (aTakesIt) aWins++;
     else bWins++;
 
