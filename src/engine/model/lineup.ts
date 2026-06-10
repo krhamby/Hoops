@@ -73,13 +73,13 @@ export function usageCurveDelta(naturalUsage: number, effUsage: number): number 
 // ---- zone make probabilities (shared with game.ts) ----------------
 // Map a TS%-like efficiency to per-zone make probability.
 export function rimMakeP(eff: number): number {
-  return clamp(0.56 + (eff - 0.54) * 1.35, 0.3, 0.78);
+  return clamp(0.575 + (eff - 0.54) * 1.5, 0.3, 0.82);
 }
 export function midMakeP(eff: number): number {
-  return clamp(0.405 + (eff - 0.54) * 0.95, 0.25, 0.58);
+  return clamp(0.425 + (eff - 0.54) * 1.05, 0.25, 0.62);
 }
 export function threeMakeP(eff: number, threeSkill: number): number {
-  return clamp(threeSkill + (eff - 0.54) * 0.4, 0.18, 0.48);
+  return clamp(threeSkill + (eff - 0.54) * 0.45, 0.18, 0.5);
 }
 
 /** Build a lineup model from 5 explicit attribute sets. */
@@ -97,7 +97,7 @@ export function lineupFromAttributes(
     const effEfficiency = clamp(
       a.scoringEfficiency + usageCurveDelta(a.usage, effUsage),
       0.4,
-      0.68,
+      0.7,
     );
     return { attrs: a, effUsage, effEfficiency };
   });
@@ -109,7 +109,7 @@ export function lineupFromAttributes(
     (s, a) => s + a.threeRate * (a.threeSkill / 0.36),
     0,
   );
-  const spacing = clamp(0.95 + 0.055 * shooterScore, 0.95, 1.07);
+  const spacing = clamp(0.955 + 0.045 * shooterScore, 0.955, 1.06);
 
   // ---- playmaking network ----
   // Team creation lifts off-ball finishers; assist-starved lineups
@@ -134,9 +134,9 @@ export function lineupFromAttributes(
     0.8 * rims[0] + 0.4 * rims[1] + 0.15 * ((rims[2] + rims[3] + rims[4]) / 3),
   );
   const perimDef = clamp01(perimSum / 2.4);
-  const oppRimMod = 1.09 - 0.24 * rimDef; // elite anchor ≈ 0.87
-  const oppMidMod = 1.05 - 0.09 * rimDef - 0.07 * perimDef;
-  const oppThreeMod = 1.06 - 0.14 * perimDef; // closeouts ≈ 0.92
+  const oppRimMod = 1.1 - 0.28 * rimDef; // elite anchor ≈ 0.84
+  const oppMidMod = 1.06 - 0.1 * rimDef - 0.08 * perimDef;
+  const oppThreeMod = 1.07 - 0.16 * perimDef; // closeouts ≈ 0.91
 
   // ---- rebounding ----
   const oSum = attrs.reduce((s, a) => s + a.offRebRate, 0);
@@ -210,7 +210,7 @@ export function expectedPPP(m: LineupModel): number {
   let pts = 0;
   for (const lp of m.players) {
     const a = lp.attrs;
-    const eff = clamp(lp.effEfficiency + m.passBoost, 0.38, 0.7);
+    const eff = clamp(lp.effEfficiency + m.passBoost, 0.38, 0.72);
     const pRim = rimMakeP(eff) * m.spacing;
     const pMid = midMakeP(eff) * (0.5 + 0.5 * m.spacing);
     const pThree = threeMakeP(eff, a.threeSkill);

@@ -140,15 +140,17 @@ export function deriveAttributes(p: Player): PlayerAttributes {
   //  - modern shooting environments lift everyone (+threeEnv),
   //  - low-volume bigs live on dunks/putbacks (+ when usage is small),
   //  - elite scorers were elite *because* they scored efficiently at
-  //    volume, so adjusted points add a small selection bonus.
+  //    volume: a convex selection curve (adjPts^1.5) — sustaining 25+
+  //    adjusted ppg requires outlier shotmaking, while the difference
+  //    between 8 and 12 ppg role players is mostly opportunity.
   const bigBonus =
     pos === "C" || pos === "PF"
       ? 0.045 * (1 - clamp01((usage - 0.1) / 0.2))
       : 0;
   const scoringEfficiency = clamp(
-    0.49 + 0.035 * ctx.threeEnv + 0.0048 * adjPts + bigBonus,
+    0.5 + 0.025 * ctx.threeEnv + 0.00155 * Math.pow(adjPts, 1.5) + bigBonus,
     0.46,
-    0.67,
+    0.68,
   );
 
   // Shot diet. ZERO threes before the 1980 line; afterwards the rate

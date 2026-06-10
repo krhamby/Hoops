@@ -38,8 +38,11 @@ export function teamStrength(roster: Roster): TeamRating {
 
   // Overall: net-rating power index mapped into the v1 numeric
   // neighborhood (superteam ~135-140, replacement-level ~85-90).
+  // Soft knee above +20 net so all-time lineups don't blow the scale.
   const netPP100 = (expectedPPP(m) - oppPPP) * 100;
-  const overall = round1(clamp(104 + netPP100 * 1.05, 60, 150));
+  const scaled =
+    netPP100 <= 20 ? netPP100 * 1.05 : 21 + (netPP100 - 20) * 0.5;
+  const overall = round1(clamp(104 + scaled, 60, 145));
 
   return { offense, defense, overall, chemistry };
 }

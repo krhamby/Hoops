@@ -47,7 +47,7 @@ export interface GameScore {
 const HOME_EDGE = 0.0075; // ±0.75% efficiency each way ≈ +1.5 net pts
 const FATIGUE_PENALTY = 0.02; // -2% efficiency on the back end of a b2b
 const FORM_SD = 0.06; // nightly hot/cold per player
-const TEAM_FORM_SD = 0.032; // correlated team-level night (travel, scheme)
+const TEAM_FORM_SD = 0.024; // correlated team-level night (travel, scheme)
 const CLUTCH_WINDOW = 8; // final possessions where stars take over
 const CLUTCH_MARGIN = 5;
 
@@ -73,7 +73,7 @@ function buildSide(
   for (let i = 0; i < m.players.length; i++) {
     form.push(clamp(1 + gauss(rng) * FORM_SD * formSd, 0.8, 1.2));
   }
-  const teamForm = clamp(1 + gauss(rng) * TEAM_FORM_SD * formSd, 0.88, 1.12);
+  const teamForm = clamp(1 + gauss(rng) * TEAM_FORM_SD * formSd, 0.9, 1.1);
   const weights = m.players.map((p, i) => {
     let w = p.effUsage * form[i];
     if (playoff) {
@@ -131,7 +131,7 @@ function possession(
   // nightly form, and game-state multipliers. Clutch tightens
   // variance: form is pulled halfway back to neutral.
   const formF = clutch ? 1 + (off.form[idx] - 1) * 0.5 : off.form[idx];
-  const eff = clamp(lp.effEfficiency + off.m.passBoost, 0.38, 0.7);
+  const eff = clamp(lp.effEfficiency + off.m.passBoost, 0.38, 0.72);
   let p: number;
   let shotPts: 2 | 3;
   if (zone === "rim") {
@@ -148,7 +148,7 @@ function possession(
 
   // --- free throw branch: shooting foul before the release ---
   const foulP =
-    a.ftRate * (zone === "rim" ? 0.42 : zone === "mid" ? 0.16 : 0.05);
+    a.ftRate * (zone === "rim" ? 0.46 : zone === "mid" ? 0.18 : 0.05);
   if (rng() < foulP) {
     let pts = 0;
     for (let i = 0; i < shotPts; i++) if (rng() < a.ftSkill) pts++;
@@ -167,7 +167,7 @@ function possession(
   const orbP = clamp(off.m.offReb * (1.44 - def.m.defReb), 0.1, 0.4);
   if (rng() < orbP) {
     const putback = clamp(
-      0.52 * off.m.spacing * def.m.oppRimMod * off.effMul,
+      0.55 * off.m.spacing * def.m.oppRimMod * off.effMul,
       0.2,
       0.75,
     );
