@@ -10,12 +10,19 @@
 //      (injected by Vite, e.g. from GitHub Actions repo variables)
 //   2. localStorage overrides  hoops.supabaseUrl / hoops.supabaseAnonKey
 //      (set from the in-app Versus settings panel)
+//   3. Baked-in defaults for the hosted game (below)
 // ============================================================
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const LS_URL_KEY = "hoops.supabaseUrl";
 const LS_ANON_KEY = "hoops.supabaseAnonKey";
+
+// Baked-in defaults for the hosted game. The publishable key is safe
+// to expose publicly by design (access is governed by RLS); it ships
+// in the deployed JS bundle either way.
+const DEFAULT_URL = "https://eqvgbvpicfssgacmtpam.supabase.co";
+const DEFAULT_ANON_KEY = "sb_publishable_TUQkQjt8vZt1T1csJPaAbA_eaDQu9ra";
 
 /** Safely read Vite build-time env (guards non-Vite/test environments). */
 function readEnv(name: string): string {
@@ -56,6 +63,10 @@ function resolveConfig(): ResolvedConfig {
   const localKey = readLocal(LS_ANON_KEY);
   if (localUrl && localKey) {
     return { url: localUrl, anonKey: localKey, source: "local" };
+  }
+
+  if (DEFAULT_URL && DEFAULT_ANON_KEY) {
+    return { url: DEFAULT_URL, anonKey: DEFAULT_ANON_KEY, source: "env" };
   }
 
   return { url: "", anonKey: "", source: "none" };
