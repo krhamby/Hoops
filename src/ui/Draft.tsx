@@ -7,6 +7,7 @@ import {
   isComplete,
   respinDecade,
   respinFranchise,
+  slotPenalty,
 } from "../engine";
 import { playersFor } from "../data/players";
 import { FRANCHISES, getFranchise } from "../data/franchises";
@@ -17,7 +18,7 @@ import StrengthMeter from "./components/StrengthMeter";
 import SynergyList from "./components/SynergyList";
 import Modal from "./components/Modal";
 import { useToast } from "./components/Toast";
-import { updateProgress } from "../multiplayer/rooms";
+import { sendProgress } from "../multiplayer/rooms";
 import { playerStatus } from "./util";
 
 type Phase = "team" | "era" | "pick";
@@ -52,7 +53,7 @@ export default function Draft({
     decadeSkipUsed: false,
   });
   const [phase, setPhase] = useState<Phase>("team");
-  const [picker, setPicker] = useState<{ player: Player; anyPosition: boolean } | null>(null);
+  const [picker, setPicker] = useState<Player | null>(null);
   const [lastFilled, setLastFilled] = useState<Position | null>(null);
   const firedRef = useRef(false);
   // After a team re-spin the era is kept, so the era reel is skipped.
@@ -76,12 +77,12 @@ export default function Draft({
   );
   const filledCount = POSITIONS.length - openPositions.length;
 
-  // Share live draft progress with the room (best effort — silently
-  // skipped on pre-migration databases or flaky connections).
+  // Share live draft progress with the room (fire-and-forget broadcast
+  // plus a durable write; failures are handled inside sendProgress).
   const roomCode = room?.code;
   useEffect(() => {
     if (mode !== "versus" || !roomCode) return;
-    updateProgress(roomCode, filledCount).catch(() => {});
+    sendProgress(roomCode, filledCount);
   }, [mode, roomCode, filledCount]);
   const pickedNames = useMemo(
     () =>
@@ -89,20 +90,6 @@ export default function Draft({
         POSITIONS.map((p) => roster[p]?.name).filter((n): n is string => Boolean(n)),
       ),
     [roster],
-  );
-
-  // Soft-lock escape hatch: when nobody in the pool fits an open slot at
-  // their natural position, allow anyone (non-duplicate) to play anywhere.
-  const poolStuck = useMemo(
-    () =>
-      players.length > 0 &&
-      openPositions.length > 0 &&
-      players.every(
-        (p) =>
-          pickedNames.has(p.name) ||
-          p.positions.every((pos) => roster[pos] !== null),
-      ),
-    [players, openPositions, pickedNames, roster],
   );
 
   // Auto-advance to the season sim once all 5 slots are filled.
@@ -127,17 +114,16 @@ export default function Draft({
 
   function handlePick(player: Player) {
     if (pickedNames.has(player.name)) return;
-    const open = player.positions.filter((p) => roster[p] === null);
-    if (open.length === 0) {
-      // Out-of-position emergency pick (only when the whole pool is stuck).
-      if (poolStuck && openPositions.length > 0) {
-        if (openPositions.length === 1) placePlayer(player, openPositions[0]);
-        else setPicker({ player, anyPosition: true });
-      }
+    if (openPositions.length === 0) return;
+    // Any non-duplicate player can fill ANY open slot (the engine prices
+    // out-of-position picks via slotPenalty). Place instantly only when
+    // there is no choice to make AND the lone slot is natural; otherwise
+    // open the picker so the cost of each slot is explicit.
+    if (openPositions.length === 1 && player.positions.includes(openPositions[0])) {
+      placePlayer(player, openPositions[0]);
       return;
     }
-    if (open.length === 1) placePlayer(player, open[0]);
-    else setPicker({ player, anyPosition: false });
+    setPicker(player);
   }
 
   function respinTeam() {
@@ -272,35 +258,23 @@ export default function Draft({
                   </p>
                 </div>
               ) : (
-                <>
-                  {poolStuck && (
-                    <div className="stuck-banner" role="status">
-                      No one here plays your open position{openPositions.length > 1 ? "s" : ""} —
-                      emergency rules: anyone can play anywhere this round.
-                    </div>
-                  )}
-                  <div className="player-grid">
-                    {players.map((p, i) => {
-                      const open = p.positions.filter((pos) => roster[pos] === null);
-                      const dup = pickedNames.has(p.name);
-                      const disabled = dup || (open.length === 0 && !poolStuck);
-                      return (
-                        <PlayerCard
-                          key={p.id}
-                          player={p}
-                          accent={franchise.colors}
-                          openPositions={poolStuck && open.length === 0 ? openPositions : open}
-                          disabled={disabled}
-                          disabledReason={
-                            dup ? "Already on your roster" : open.length === 0 && !poolStuck ? "No open position" : undefined
-                          }
-                          onPick={handlePick}
-                          index={i}
-                        />
-                      );
-                    })}
-                  </div>
-                </>
+                <div className="player-grid">
+                  {players.map((p, i) => {
+                    const dup = pickedNames.has(p.name);
+                    return (
+                      <PlayerCard
+                        key={p.id}
+                        player={p}
+                        accent={franchise.colors}
+                        openPositions={p.positions.filter((pos) => roster[pos] === null)}
+                        disabled={dup}
+                        disabledReason={dup ? "Already on your roster" : undefined}
+                        onPick={handlePick}
+                        index={i}
+                      />
+                    );
+                  })}
+                </div>
               )}
             </>
           )}
@@ -335,24 +309,35 @@ export default function Draft({
       </div>
 
       {picker && (
-        <Modal title={`Slot ${picker.player.name}`} onClose={() => setPicker(null)}>
-          <p className="picker-hint">
-            Pick a position for {picker.player.name}
-            {picker.anyPosition ? " (out of position — emergency rules)" : ""}:
-          </p>
-          <div className="picker-buttons">
-            {(picker.anyPosition ? openPositions : picker.player.positions.filter((pos) => roster[pos] === null)).map(
-              (pos) => (
+        <Modal title={`Slot ${picker.name}`} onClose={() => setPicker(null)}>
+          <p className="picker-hint">Pick a position for {picker.name}:</p>
+          <div className="picker-list">
+            {openPositions
+              .map((pos) => ({
+                pos,
+                natural: picker.positions.includes(pos),
+                penalty: slotPenalty(picker, pos),
+              }))
+              // Natural slots first; openPositions is already in
+              // PG→C order, and sort() is stable within each group.
+              .sort((a, b) => Number(b.natural) - Number(a.natural))
+              .map(({ pos, natural, penalty }) => (
                 <button
                   key={pos}
                   type="button"
-                  className="btn btn-primary picker-pos"
-                  onClick={() => placePlayer(picker.player, pos)}
+                  className={`btn picker-opt ${natural ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => placePlayer(picker, pos)}
                 >
-                  {pos}
+                  <span className="picker-opt-pos display">{pos}</span>
+                  {natural ? (
+                    <span className="picker-badge mono">natural</span>
+                  ) : (
+                    <span className="picker-cost mono">
+                      out of position −{Math.round(penalty * 100)}%
+                    </span>
+                  )}
                 </button>
-              ),
-            )}
+              ))}
           </div>
         </Modal>
       )}

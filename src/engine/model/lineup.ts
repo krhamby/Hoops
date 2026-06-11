@@ -9,8 +9,8 @@
 
 import { POSITIONS, type Position, type Roster } from "../../types";
 import {
-  deriveAttributes,
   replacementAttributes,
+  slottedAttributes,
   type PlayerAttributes,
 } from "./attributes";
 import { eraContext, REF_PACE } from "./era";
@@ -198,7 +198,11 @@ export function buildLineup(roster: Roster): LineupModel {
   for (const pos of POSITIONS) {
     const p = roster[pos];
     if (p) {
-      attrs.push(deriveAttributes(p, pos));
+      // Slot-aware attributes: in-position this is plain derivation;
+      // off-position players pay the severity-scaled slot tax (see
+      // attributes.ts). Baked in here, the cost flows identically
+      // through teamStrength, seasons, series and box scores.
+      attrs.push(slottedAttributes(p, pos));
       paceSum += eraContext(p.decade).pace;
       filled++;
     } else {

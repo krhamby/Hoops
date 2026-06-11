@@ -96,3 +96,8 @@ alter table public.room_players
 
 alter table public.room_players
   add column if not exists left_at timestamptz;
+
+-- ---------------- Round results (migration 20260612090000) ----------------
+
+alter table public.rooms
+  add column if not exists results jsonb;

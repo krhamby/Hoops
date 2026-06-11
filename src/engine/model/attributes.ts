@@ -259,6 +259,85 @@ export function deriveAttributes(p: Player, slot?: Position): PlayerAttributes {
   };
 }
 
+// ---- out-of-position slotting ------------------------------------
+// The draft UI allows ANY player into ANY open slot. Playing off
+// position is a real strategic tradeoff, not free: severity grows
+// with distance from the player's nearest listed position on the
+// PG-SG-SF-PF-C spectrum, and the lineup pays for it via
+// applySlotPenalty below (baked into the attributes, so the cost
+// flows identically through teamStrength, simulateSeason,
+// simulateSeries and series box scores).
+
+const POS_INDEX: Record<Position, number> = { PG: 0, SG: 1, SF: 2, PF: 3, C: 4 };
+
+/** Severity by spectrum distance: 1 step ≈ mild tax, PG↔C = 1.0. */
+const STEP_SEVERITY = [0, 0.25, 0.55, 0.8, 1] as const;
+
+// Attribute taxes at full severity 1.0 (a PG jammed at C), scaled
+// linearly by severity. Tuned so a star one step off position is
+// mildly taxed (clearly better than a replacement body and usually
+// better than an in-position scrub), while a guard at center is a
+// real liability — bullied on the glass and at the rim — yet still
+// better than an empty slot.
+const PEN_SCORING = 0.08; // scoring efficiency -8%
+const PEN_PLAYMAKING = 0.15; // playmaking -15%
+const PEN_REB_DEF = 0.2; // rebounding + defense effectiveness -20%
+const PEN_TURNOVER = 0.15; // turnoverRate +15%
+
+/** Listed position nearest to `slot` (the role he actually knows). */
+function nearestListed(p: Player, slot: Position): Position {
+  if (p.positions.includes(slot)) return slot;
+  let best: Position = p.positions[0] ?? "SF";
+  let bestDist = Math.abs(POS_INDEX[best] - POS_INDEX[slot]);
+  for (const pos of p.positions) {
+    const d = Math.abs(POS_INDEX[pos] - POS_INDEX[slot]);
+    if (d < bestDist) {
+      best = pos;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+/**
+ * Out-of-position severity for slotting `player` at `slot`.
+ * 0 when the slot is listed; otherwise (0, 1] by spectrum distance
+ * from the NEAREST listed position: 1 step (SG at PG/SF) = 0.25,
+ * 2 steps = 0.55, 3 steps = 0.8, 4 steps (PG at C) = 1.0.
+ */
+export function slotPenalty(player: Player, slot: Position): number {
+  if (player.positions.includes(slot)) return 0;
+  const near = nearestListed(player, slot);
+  return STEP_SEVERITY[Math.abs(POS_INDEX[near] - POS_INDEX[slot])];
+}
+
+/**
+ * Attributes for a player as actually slotted, including the
+ * out-of-position tax. In-position this is exactly deriveAttributes
+ * (zero penalty — all-natural rosters are unaffected). Off-position
+ * the player keeps his natural game (skills derive at his nearest
+ * listed position; a center asked to bring the ball up doesn't grow
+ * a guard's shot diet) but pays the severity-scaled tax, and
+ * `attrs.position` reports the SLOT so downstream role logic
+ * (synergy archetypes, UI) sees the role he is filling.
+ */
+export function slottedAttributes(p: Player, slot: Position): PlayerAttributes {
+  const severity = slotPenalty(p, slot);
+  if (severity === 0) return deriveAttributes(p, slot);
+  const a = deriveAttributes(p, nearestListed(p, slot));
+  return {
+    ...a,
+    position: slot,
+    scoringEfficiency: a.scoringEfficiency * (1 - PEN_SCORING * severity),
+    playmaking: a.playmaking * (1 - PEN_PLAYMAKING * severity),
+    offRebRate: a.offRebRate * (1 - PEN_REB_DEF * severity),
+    defRebRate: a.defRebRate * (1 - PEN_REB_DEF * severity),
+    rimProtection: a.rimProtection * (1 - PEN_REB_DEF * severity),
+    perimeterDefense: a.perimeterDefense * (1 - PEN_REB_DEF * severity),
+    turnoverRate: clamp(a.turnoverRate * (1 + PEN_TURNOVER * severity), 0.08, 0.25),
+  };
+}
+
 /** Replacement-level attributes for an unfilled roster slot. */
 export function replacementAttributes(pos: Position): PlayerAttributes {
   return {

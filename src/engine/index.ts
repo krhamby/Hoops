@@ -13,3 +13,4 @@ export {
   parseYears,
   yearsOverlap,
 } from "./model/synergy";
+export { slotPenalty } from "./model/attributes";

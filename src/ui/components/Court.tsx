@@ -34,6 +34,11 @@ export default function Court({ roster, lastFilled }: CourtProps) {
           >
             <span className="slot-pos mono">{pos}</span>
             <span className="slot-name">{player ? player.name : "—"}</span>
+            {player && !player.positions.includes(pos) && (
+              <span className="slot-oop mono" title="Playing out of position">
+                OOP
+              </span>
+            )}
           </div>
         );
       })}

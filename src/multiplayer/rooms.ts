@@ -8,7 +8,13 @@
 // ============================================================
 
 import type { SupabaseClient, RealtimeChannel } from "@supabase/supabase-js";
-import type { Position, Room, RoomPlayer, RoomStatus } from "../types";
+import type {
+  Position,
+  Room,
+  RoomPlayer,
+  RoomStatus,
+  StoredResults,
+} from "../types";
 import { getSupabase, isConfigured } from "./config";
 import { getIdentity } from "./identity";
 
@@ -22,6 +28,8 @@ interface RoomRow {
   created_at: string;
   /** Absent until the rematch_rounds migration has been applied. */
   round?: number | null;
+  /** Absent until the round_results migration has been applied. */
+  results?: unknown;
 }
 
 interface RoomPlayerRow {
@@ -93,6 +101,16 @@ function mapPlayer(row: RoomPlayerRow): RoomPlayer {
   };
 }
 
+/**
+ * Stored round results come back from jsonb as parsed JSON. Null/absent
+ * (pre-migration column, or round not finalized yet) maps to null so the
+ * UI falls back to client-side computation.
+ */
+function parseStoredResults(value: unknown): StoredResults | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as StoredResults;
+}
+
 function mapRoom(roomRow: RoomRow, playerRows: RoomPlayerRow[]): Room {
   const sorted = [...playerRows].sort((a, b) =>
     a.joined_at < b.joined_at ? -1 : a.joined_at > b.joined_at ? 1 : 0
@@ -104,6 +122,7 @@ function mapRoom(roomRow: RoomRow, playerRows: RoomPlayerRow[]): Room {
     hostId: roomRow.host_id,
     createdAt: roomRow.created_at,
     round: roomRow.round ?? 1,
+    results: parseStoredResults(roomRow.results),
     players: sorted.map(mapPlayer),
   };
 }
@@ -248,13 +267,19 @@ export async function fetchRoom(code: string): Promise<Room | null> {
   return fetchRoomWithClient(client, code);
 }
 
-/** Host action: move the room from "lobby" to "drafting". */
+/**
+ * Host action: move the room from "lobby" to "drafting". Gated on the
+ * current status so a stale double-start (e.g. a retried click after the
+ * room already advanced, or a backgrounded tab waking up) matches zero
+ * rows instead of yanking an in-flight round back to "drafting".
+ */
 export async function startRoom(code: string): Promise<void> {
   const client = requireClient();
   const { error } = await client
     .from("rooms")
     .update({ status: "drafting" satisfies RoomStatus })
-    .eq("code", normalizeCode(code));
+    .eq("code", normalizeCode(code))
+    .eq("status", "lobby" satisfies RoomStatus);
   if (error) throw new Error(`Could not start room: ${error.message}`);
 }
 
@@ -323,6 +348,30 @@ export async function submitResult(
 }
 
 /**
+ * Store the authoritative round outcome on the room, first-writer-wins:
+ * the update is guarded by `results is null`, so when another client
+ * already finalized this round the update matches zero rows and this
+ * call SILENTLY succeeds (the loser simply renders the stored results
+ * it receives via its subscription). Likewise a silent no-op on
+ * databases without the round_results migration — those clients keep
+ * computing results locally, exactly as before.
+ */
+export async function finalizeResults(
+  code: string,
+  results: StoredResults
+): Promise<void> {
+  const client = requireClient();
+  const { error } = await client
+    .from("rooms")
+    .update({ results })
+    .eq("code", normalizeCode(code))
+    .is("results", null);
+  if (error && !isMissingColumn(error)) {
+    throw new Error(`Could not store round results: ${error.message}`);
+  }
+}
+
+/**
  * Host action: run it back. Awards the finished round's champion a
  * crown, wipes every player's roster/record, rolls a fresh shared
  * seed, bumps the round counter, and drops the whole room straight
@@ -359,18 +408,41 @@ export async function rematchRoom(
   // performs the done -> drafting transition for this round (a retry
   // after a partial failure, or a double-click, can't re-transition).
   // Clients never see "done with wiped rosters", which previously
-  // flashed an error screen.
-  const { data: flipped, error: flipError } = await client
-    .from("rooms")
-    .update({
-      seed: randomSeed(),
-      status: "drafting" satisfies RoomStatus,
-      round: currentRound + 1,
-    })
-    .eq("code", normalized)
-    .eq("status", "done" satisfies RoomStatus)
-    .eq("round", currentRound)
-    .select("code");
+  // flashed an error screen. Also clears the stored round results so
+  // the new round's first finisher can finalize fresh ones.
+  const newSeed = randomSeed();
+  const flip = {
+    seed: newSeed,
+    status: "drafting" satisfies RoomStatus,
+    round: currentRound + 1,
+  };
+  let flipped: unknown[] | null = null;
+  let flipError: { code?: string; message: string } | null = null;
+  {
+    const res = await client
+      .from("rooms")
+      .update({ ...flip, results: null })
+      .eq("code", normalized)
+      .eq("status", "done" satisfies RoomStatus)
+      .eq("round", currentRound)
+      .select("code");
+    flipped = res.data;
+    flipError = res.error;
+  }
+  if (flipError && isMissingColumn(flipError)) {
+    // The results column may not exist yet (round_results migration not
+    // applied); retry without it. If `round` is the missing column the
+    // retry fails the same way and is reported as the migration hint.
+    const res = await client
+      .from("rooms")
+      .update(flip)
+      .eq("code", normalized)
+      .eq("status", "done" satisfies RoomStatus)
+      .eq("round", currentRound)
+      .select("code");
+    flipped = res.data;
+    flipError = res.error;
+  }
   if (flipError) throw describe("Could not start the rematch", flipError);
   const wonTransition = (flipped?.length ?? 0) > 0;
 
@@ -424,9 +496,128 @@ export async function markLeftRoom(code: string): Promise<void> {
   }
 }
 
+// ---------------- Live draft-progress broadcast ----------------
+//
+// Draft progress rides Supabase Realtime BROADCAST as the primary
+// liveness channel: instant, and immune to the PostgREST schema-cache
+// windows that can silently drop the `progress` column write. One
+// shared channel per room code (`room:CODE:live`), kept in a
+// module-level refcounted registry so the Draft screen's sender and
+// App's room subscriber reuse the same socket channel. The table
+// column stays as the durable fallback for poll-only clients.
+
+type ProgressListener = (playerId: string, progress: number, at: number) => void;
+
+interface LiveEntry {
+  client: SupabaseClient;
+  channel: RealtimeChannel;
+  /** Held only by subscribeRoom callers; senders borrow without a ref. */
+  refs: number;
+  listeners: Set<ProgressListener>;
+}
+
+const liveEntries = new Map<string, LiveEntry>();
+
+/**
+ * Get (or lazily create + subscribe) the shared live channel for a
+ * room. Does NOT take a ref — callers that need teardown semantics use
+ * acquireLiveEntry/releaseLiveEntry.
+ */
+function ensureLiveEntry(client: SupabaseClient, code: string): LiveEntry {
+  const existing = liveEntries.get(code);
+  if (existing) return existing;
+
+  const listeners = new Set<ProgressListener>();
+  const channel = client
+    .channel(`room:${code}:live`, { config: { broadcast: { self: true } } })
+    .on("broadcast", { event: "progress" }, (message) => {
+      const payload = (
+        message as {
+          payload?: { playerId?: unknown; progress?: unknown; at?: unknown };
+        }
+      ).payload;
+      const playerId = payload?.playerId;
+      const progress = payload?.progress;
+      if (typeof playerId !== "string" || typeof progress !== "number") return;
+      const at = typeof payload?.at === "number" ? payload.at : Date.now();
+      for (const listener of listeners) listener(playerId, progress, at);
+    });
+  channel.subscribe();
+
+  const entry: LiveEntry = { client, channel, refs: 0, listeners };
+  liveEntries.set(code, entry);
+  return entry;
+}
+
+function acquireLiveEntry(client: SupabaseClient, code: string): LiveEntry {
+  const entry = ensureLiveEntry(client, code);
+  entry.refs += 1;
+  return entry;
+}
+
+function releaseLiveEntry(code: string): void {
+  const entry = liveEntries.get(code);
+  if (!entry) return;
+  entry.refs -= 1;
+  if (entry.refs <= 0) {
+    liveEntries.delete(code);
+    void entry.client.removeChannel(entry.channel);
+  }
+}
+
+/** Trailing-edge debounce for the durable progress column write. */
+const PROGRESS_WRITE_DEBOUNCE_MS = 1500;
+const progressWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
 /**
  * Report live draft progress (picks made this round, 0-5) so the rest
  * of the room sees "Pick N of 5" instead of a generic spinner.
+ * Fire-and-forget and never throws:
+ *
+ *   1. Broadcasts a "progress" event on the shared room live channel
+ *      immediately (instant for everyone subscribed via subscribeRoom).
+ *   2. Durably writes the room_players.progress column via
+ *      updateProgress, debounced ~1.5s — except the final pick (5),
+ *      which writes immediately so the submitted state lands fast.
+ */
+export function sendProgress(code: string, progress: number): void {
+  const client = getSupabase();
+  if (!client) return; // Unconfigured — Versus UI is gated behind isConfigured().
+  const normalized = normalizeCode(code);
+  const clamped = Math.max(0, Math.min(5, Math.round(progress)));
+
+  try {
+    const entry = ensureLiveEntry(client, normalized);
+    void entry.channel.send({
+      type: "broadcast",
+      event: "progress",
+      payload: { playerId: getIdentity().id, progress: clamped, at: Date.now() },
+    });
+  } catch {
+    // Broadcast is best-effort; the durable write below still lands.
+  }
+
+  const pending = progressWriteTimers.get(normalized);
+  if (pending !== undefined) clearTimeout(pending);
+  const write = () => {
+    progressWriteTimers.delete(normalized);
+    updateProgress(normalized, clamped).catch(() => {
+      // Best-effort: pre-migration databases (or a schema-cache window)
+      // just miss the durable copy; the broadcast already went out.
+    });
+  };
+  if (clamped >= 5) {
+    write();
+  } else {
+    progressWriteTimers.set(
+      normalized,
+      setTimeout(write, PROGRESS_WRITE_DEBOUNCE_MS)
+    );
+  }
+}
+
+/**
+ * Durable draft-progress write (the table column behind sendProgress).
  * Best-effort: silently a no-op on pre-migration databases.
  */
 export async function updateProgress(
@@ -447,12 +638,21 @@ export async function updateProgress(
 }
 
 /**
- * Subscribe to live updates for a room. Uses Supabase realtime
- * (postgres_changes on both tables, filtered to the room) and
- * additionally polls every 5 seconds as a fallback for users whose
- * connections block websockets or projects with realtime disabled.
+ * Subscribe to live updates for a room. Three sources, fastest wins:
  *
- * Returns an unsubscribe function that tears down both.
+ *   1. "progress" BROADCASTS on the shared live channel — delivered
+ *      instantly by overlaying the broadcast progress onto the last
+ *      fetched room (no database round-trip).
+ *   2. postgres_changes on both tables, filtered to the room.
+ *   3. A 5-second poll as a fallback for users whose connections block
+ *      websockets or projects with realtime disabled (plus an initial
+ *      snapshot fetch).
+ *
+ * Every room delivered to cb carries, per player,
+ * progress = max(durable column, latest broadcast overlay); the
+ * overlay is cleared whenever the round changes or the room leaves
+ * "drafting". Returns an unsubscribe function that tears everything
+ * down (the shared live channel is refcounted with sendProgress).
  */
 export function subscribeRoom(
   code: string,
@@ -463,13 +663,41 @@ export function subscribeRoom(
 
   let active = true;
   let fetching = false;
+  /** Last room fetched from the database, pre-overlay. */
+  let lastRoom: Room | null = null;
+  /** Round the overlay belongs to (null until the first fetch lands). */
+  let overlayRound: number | null = null;
+  const overlay = new Map<string, { progress: number; at: number }>();
+
+  /** Drop stale broadcast progress when the round moves on. */
+  const syncOverlay = (room: Room) => {
+    const roundChanged = overlayRound !== null && overlayRound !== room.round;
+    if (roundChanged || room.status !== "drafting") overlay.clear();
+    overlayRound = room.round;
+  };
+
+  /** Emit to cb with the broadcast overlay applied (max per player). */
+  const deliver = (room: Room) => {
+    if (!active) return;
+    const players = room.players.map((p) => {
+      const live = overlay.get(p.id);
+      return live && live.progress > p.progress
+        ? { ...p, progress: live.progress }
+        : p;
+    });
+    cb({ ...room, players });
+  };
 
   const refresh = async () => {
     if (!active || fetching) return;
     fetching = true;
     try {
       const room = await fetchRoomWithClient(client, normalized);
-      if (active && room) cb(room);
+      if (active && room) {
+        lastRoom = room;
+        syncOverlay(room);
+        deliver(room);
+      }
     } catch {
       // Transient fetch failure; the next poll/event will retry.
     } finally {
@@ -477,6 +705,21 @@ export function subscribeRoom(
     }
   };
 
+  // 1. Instant liveness: progress broadcasts update the overlay and
+  //    re-deliver immediately, synthesized from the last fetched room.
+  const liveEntry = acquireLiveEntry(client, normalized);
+  const onProgress: ProgressListener = (playerId, progress, at) => {
+    if (!active) return;
+    const prev = overlay.get(playerId);
+    overlay.set(playerId, {
+      progress: prev && prev.progress > progress ? prev.progress : progress,
+      at,
+    });
+    if (lastRoom && lastRoom.status === "drafting") deliver(lastRoom);
+  };
+  liveEntry.listeners.add(onProgress);
+
+  // 2. Database change events.
   const channel: RealtimeChannel = client
     .channel(`room:${normalized}`)
     .on(
@@ -501,7 +744,7 @@ export function subscribeRoom(
     )
     .subscribe();
 
-  // Polling fallback (GitHub Pages users may have realtime disabled).
+  // 3. Polling fallback (GitHub Pages users may have realtime disabled).
   const interval = setInterval(() => void refresh(), 5000);
 
   // Initial snapshot so subscribers don't wait for the first tick.
@@ -510,6 +753,8 @@ export function subscribeRoom(
   return () => {
     active = false;
     clearInterval(interval);
+    liveEntry.listeners.delete(onProgress);
+    releaseLiveEntry(normalized);
     void client.removeChannel(channel);
   };
 }

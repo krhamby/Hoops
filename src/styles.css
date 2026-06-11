@@ -2112,3 +2112,74 @@ button.series-game:hover {
 }
 .synergy-compact .syn-label { font-size: 0.78rem; }
 .synergy-compact ul { gap: 5px; }
+
+/* ============================================================
+   Out-of-position drafting + stored round results (v1.3)
+   ============================================================ */
+
+/* --- draft position picker: natural vs out-of-position slots --- */
+.picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.picker-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+.picker-opt-pos {
+  font-size: 1.25rem;
+  min-width: 2.4ch;
+}
+.picker-badge {
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--win);
+  border: 1px solid rgba(39, 209, 122, 0.45);
+  border-radius: 5px;
+  padding: 2px 7px;
+}
+.picker-cost {
+  font-size: 0.74rem;
+  color: var(--gold);
+}
+
+/* --- court: out-of-position tag on a filled slot --- */
+.slot-oop {
+  font-size: 0.54rem;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+/* --- versus results: "how the title was decided" --- */
+.decided-note {
+  margin: 14px 0 0;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.decided-kicker {
+  display: block;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 4px;
+}
+.decided-note p {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}

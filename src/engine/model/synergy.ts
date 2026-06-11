@@ -29,7 +29,7 @@ import {
   type Roster,
   type Synergy,
 } from "../../types";
-import { deriveAttributes, type PlayerAttributes } from "./attributes";
+import { slottedAttributes, type PlayerAttributes } from "./attributes";
 import { eraContext } from "./era";
 
 const clamp = (x: number, lo: number, hi: number) =>
@@ -166,7 +166,12 @@ export function detectSynergyEffects(roster: Roster): SynergyEffect[] {
   const present: Slotted[] = [];
   for (const pos of POSITIONS) {
     const p = roster[pos];
-    if (p) present.push({ p, pos, attrs: deriveAttributes(p, pos) });
+    // Slot-aware (incl. out-of-position tax): archetype synergies
+    // evaluate the SLOTTED role, so a rim-running center wedged in at
+    // PF still reads as a frontcourt lob threat, while a guard parked
+    // at C is judged (and found wanting) as the big he's pretending
+    // to be. attrs.position reports the slot for off-position players.
+    if (p) present.push({ p, pos, attrs: slottedAttributes(p, pos) });
   }
   const out: SynergyEffect[] = [];
   if (present.length < 2) return out;
@@ -288,8 +293,8 @@ export function detectSynergyEffects(roster: Roster): SynergyEffect[] {
   const pf = roster.PF;
   const c = roster.C;
   if (pf && c && pf.id !== c.id) {
-    const pfA = deriveAttributes(pf, "PF");
-    const cA = deriveAttributes(c, "C");
+    const pfA = slottedAttributes(pf, "PF");
+    const cA = slottedAttributes(c, "C");
     const bothNonShooters =
       pfA.threeRate <= 0.05 &&
       cA.threeRate <= 0.05 &&

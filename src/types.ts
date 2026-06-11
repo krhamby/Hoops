@@ -175,6 +175,8 @@ export interface Room {
   createdAt: string;
   /** Rematch counter: 1 for the first game, +1 per "run it back". */
   round: number;
+  /** Authoritative round outcome, stored by the first finisher's client. */
+  results: StoredResults | null;
   players: RoomPlayer[];
 }
 
@@ -186,4 +188,32 @@ export interface StandingsEntry {
   rank: number;
   /** Finished at/above the playoff bar (see PLAYOFF_BAR) and played the round-robin. */
   qualified: boolean;
+}
+
+// ---------------- Persisted round results ----------------
+// Computed once by the first client that sees the room finish and
+// stored on the room, so every player renders the SAME outcome even
+// across app versions (clients never re-simulate independently).
+
+export interface StoredStanding {
+  playerId: string;
+  seasonWins: number;
+  seasonLosses: number;
+  h2hWins: number;
+  rank: number;
+  qualified: boolean;
+}
+
+export interface StoredSeries {
+  aId: string;
+  bId: string;
+  result: SeriesResult;
+}
+
+export interface StoredResults {
+  /** Player id of the client that computed and stored the results. */
+  computedBy: string;
+  round: number;
+  standings: StoredStanding[];
+  series: StoredSeries[];
 }
