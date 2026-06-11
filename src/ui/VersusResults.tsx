@@ -8,7 +8,13 @@ import type {
   StoredResults,
 } from "../types";
 import { POSITIONS } from "../types";
-import { computeStandings, rosterFromIds, PLAYOFF_BAR } from "../engine";
+import {
+  computeStandings,
+  matchupOdds,
+  rosterFromIds,
+  teamStrength,
+  PLAYOFF_BAR,
+} from "../engine";
 import { getPlayer } from "../data/players";
 import { getFranchise } from "../data/franchises";
 import { finalizeResults, rematchRoom } from "../multiplayer/rooms";
@@ -527,12 +533,119 @@ function SeriesCard({
       </button>
       {open && (
         <div className="series-games">
+          <SeriesBreakdown a={a} b={b} result={result} />
           {result.games.map((g) => (
             <SeriesGameRow key={g.gameNo} game={g} aName={aName} bName={bName} />
           ))}
           <div className="series-note">{winnerName} takes the series</div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Tale of the tape + a generated explanation of the result: who the
+ * model favored, whether the outcome was expected or an upset, how
+ * tight the games were, and who carried the scoring.
+ */
+function SeriesBreakdown({
+  a,
+  b,
+  result,
+}: {
+  a: Participant;
+  b: Participant;
+  result: SeriesResult;
+}) {
+  const breakdown = useMemo(() => {
+    if (!a.roster || !b.roster) return null;
+    try {
+      const ra = rosterFromIds(a.roster);
+      const rb = rosterFromIds(b.roster);
+      return {
+        ta: teamStrength(ra),
+        tb: teamStrength(rb),
+        odds: matchupOdds(ra, rb),
+      };
+    } catch {
+      return null;
+    }
+  }, [a.roster, b.roster]);
+  if (!breakdown) return null;
+  const { ta, tb, odds } = breakdown;
+
+  // ---- generated explanation ----
+  const winnerP = result.winner === "a" ? a : b;
+  const winnerPct = result.winner === "a" ? odds.aSeriesWinPct : 1 - odds.aSeriesWinPct;
+  const pctTxt = `${Math.round(winnerPct * 100)}%`;
+  const sentences: string[] = [];
+  if (Math.abs(odds.aSeriesWinPct - 0.5) < 0.07) {
+    sentences.push(
+      `This was a true coin-flip series (${pctTxt} for ${winnerP.name} over many replays) — the teams are nearly even, and a ${result.winner === "a" ? result.aWins : result.bWins}–${result.winner === "a" ? result.bWins : result.aWins} result between equals is normal, not a verdict.`,
+    );
+  } else if (winnerPct >= 0.5) {
+    sentences.push(
+      `${winnerP.name} won as the favorite — the model gives this matchup to them in ${pctTxt} of replays.`,
+    );
+  } else {
+    sentences.push(
+      `${winnerP.name} pulled the upset: the model makes them only a ${pctTxt} shot in this matchup, but best-of-7s between close teams swing on a few possessions.`,
+    );
+  }
+  const close = result.games.filter((g) => Math.abs(g.aScore - g.bScore) <= 5).length;
+  if (close > 0) {
+    sentences.push(
+      `${close} of the ${result.games.length} games came down to 5 points or fewer.`,
+    );
+  }
+  // Top scorer across the series.
+  const totals = new Map<string, { pts: number; n: number }>();
+  for (const g of result.games) {
+    for (const line of [...g.aBox, ...g.bBox]) {
+      const t = totals.get(line.name) ?? { pts: 0, n: 0 };
+      t.pts += line.pts;
+      t.n += 1;
+      totals.set(line.name, t);
+    }
+  }
+  let topName = "";
+  let topAvg = 0;
+  for (const [name, t] of totals) {
+    const avg = t.pts / t.n;
+    if (avg > topAvg) {
+      topAvg = avg;
+      topName = name;
+    }
+  }
+  if (topName) {
+    sentences.push(`${topName} led all scorers at ${topAvg.toFixed(1)} a game.`);
+  }
+
+  const rows: { label: string; av: string; bv: string; aBetter: boolean }[] = [
+    { label: "Overall", av: ta.overall.toFixed(1), bv: tb.overall.toFixed(1), aBetter: ta.overall >= tb.overall },
+    { label: "Offense", av: ta.offense.toFixed(1), bv: tb.offense.toFixed(1), aBetter: ta.offense >= tb.offense },
+    { label: "Defense", av: ta.defense.toFixed(1), bv: tb.defense.toFixed(1), aBetter: ta.defense >= tb.defense },
+    { label: "Chemistry", av: `${Math.round(ta.chemistry * 100)}%`, bv: `${Math.round(tb.chemistry * 100)}%`, aBetter: ta.chemistry >= tb.chemistry },
+  ];
+
+  return (
+    <div className="series-breakdown">
+      <div className="tape">
+        <div className="tape-head mono">
+          <span>{a.name}</span>
+          <span />
+          <span>{b.name}</span>
+        </div>
+        {rows.map((r) => (
+          <div key={r.label} className="tape-row mono">
+            <span className={r.aBetter ? "tape-win" : ""}>{r.av}</span>
+            <span className="tape-label">{r.label}</span>
+            <span className={!r.aBetter ? "tape-win" : ""}>{r.bv}</span>
+          </div>
+        ))}
+      </div>
+      <p className="series-explain">{sentences.join(" ")}</p>
     </div>
   );
 }

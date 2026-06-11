@@ -182,3 +182,29 @@ describe("end-to-end game flow on real data", () => {
     expect(isComplete(roster)).toBe(true);
   });
 });
+
+describe("matchup odds", () => {
+  it("is deterministic and favors the stronger roster", async () => {
+    const { matchupOdds } = await import("../odds");
+    const strong = draftFromSpins("odds-strong");
+    // Weak roster: take the LAST (lowest-scoring) eligible players.
+    const spins = generateSpins("odds-weak");
+    const weak = emptyRoster();
+    for (const pos of POSITIONS) {
+      for (const spin of spins) {
+        const pool = playersFor(spin.franchiseId, spin.decade);
+        const cand = [...pool].reverse().find(
+          (p) => p.positions.includes(pos) && !Object.values(weak).some((r) => r?.id === p.id),
+        );
+        if (cand) {
+          weak[pos] = cand;
+          break;
+        }
+      }
+    }
+    const o1 = matchupOdds(strong, weak, 40);
+    const o2 = matchupOdds(strong, weak, 40);
+    expect(o1).toEqual(o2);
+    expect(o1.avgMargin).toBeGreaterThan(0);
+  });
+});
