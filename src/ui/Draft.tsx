@@ -7,7 +7,6 @@ import {
   isComplete,
   respinDecade,
   respinFranchise,
-  slotPenalty,
 } from "../engine";
 import { playersFor } from "../data/players";
 import { FRANCHISES, getFranchise } from "../data/franchises";
@@ -92,15 +91,13 @@ export default function Draft({
     [roster],
   );
 
-  // Auto-advance to the season sim once all 5 slots are filled.
-  useEffect(() => {
+  const complete = isComplete(roster);
+
+  function lockIn() {
     if (firedRef.current || !isComplete(roster)) return;
-    const t = window.setTimeout(() => {
-      firedRef.current = true;
-      onComplete(roster);
-    }, 800);
-    return () => window.clearTimeout(t);
-  }, [roster, onComplete]);
+    firedRef.current = true;
+    onComplete(roster);
+  }
 
   function placePlayer(player: Player, pos: Position) {
     setRoster((r) => ({ ...r, [pos]: player }));
@@ -114,16 +111,36 @@ export default function Draft({
 
   function handlePick(player: Player) {
     if (pickedNames.has(player.name)) return;
-    if (openPositions.length === 0) return;
-    // Any non-duplicate player can fill ANY open slot (the engine prices
-    // out-of-position picks via slotPenalty). Place instantly only when
-    // there is no choice to make AND the lone slot is natural; otherwise
-    // open the picker so the cost of each slot is explicit.
-    if (openPositions.length === 1 && player.positions.includes(openPositions[0])) {
-      placePlayer(player, openPositions[0]);
+    // Strictly natural positions — logjams are solved by dragging
+    // already-placed players around the court (à la 82-0.com).
+    const open = player.positions.filter((pos) => roster[pos] === null);
+    if (open.length === 0) return;
+    if (open.length === 1) {
+      placePlayer(player, open[0]);
       return;
     }
     setPicker(player);
+  }
+
+  /**
+   * Court rearrangement: move a placed player to another slot he can
+   * actually play (swapping requires the displaced player to fit the
+   * vacated slot too). This is the escape hatch for position logjams.
+   */
+  function movePlayer(from: Position, to: Position) {
+    const mover = roster[from];
+    if (!mover) return;
+    if (!mover.positions.includes(to)) {
+      toast(`${mover.name} doesn't play ${to}`, "error");
+      return;
+    }
+    const displaced = roster[to];
+    if (displaced && !displaced.positions.includes(from)) {
+      toast(`${displaced.name} doesn't play ${from}, so they can't swap`, "error");
+      return;
+    }
+    setRoster((r) => ({ ...r, [from]: displaced ?? null, [to]: mover }));
+    setLastFilled(to);
   }
 
   function respinTeam() {
@@ -188,7 +205,7 @@ export default function Draft({
             type="button"
             className="btn btn-skip"
             onClick={respinTeam}
-            disabled={skips.franchiseSkipUsed || phase !== "pick"}
+            disabled={skips.franchiseSkipUsed || phase !== "pick" || complete}
             title={skips.franchiseSkipUsed ? "Team re-spin already used" : "Re-spin the franchise (once per game)"}
           >
             🔁 Re-spin team {skips.franchiseSkipUsed ? "· used" : ""}
@@ -197,7 +214,7 @@ export default function Draft({
             type="button"
             className="btn btn-skip"
             onClick={respinEra}
-            disabled={skips.decadeSkipUsed || phase !== "pick"}
+            disabled={skips.decadeSkipUsed || phase !== "pick" || complete}
             title={skips.decadeSkipUsed ? "Era re-spin already used" : "Re-spin the decade (once per game)"}
           >
             🔁 Re-spin era {skips.decadeSkipUsed ? "· used" : ""}
@@ -250,7 +267,17 @@ export default function Draft({
                 <span className="spin-banner-team display">{franchise.name}</span>
                 <span className="spin-banner-era mono">{spin.decade}</span>
               </div>
-              {players.length === 0 ? (
+              {complete ? (
+                <div className="lockin-panel">
+                  <p className="lockin-title display">Your five is set.</p>
+                  <p className="lockin-hint">
+                    Drag players around the court to fine-tune positions, then run the season.
+                  </p>
+                  <button type="button" className="btn btn-primary btn-big" onClick={lockIn}>
+                    ▶ Sim the season
+                  </button>
+                </div>
+              ) : players.length === 0 ? (
                 <div className="empty-pool">
                   <p>No players in our database for this franchise and era yet.</p>
                   <p className="empty-pool-hint">
@@ -258,30 +285,51 @@ export default function Draft({
                   </p>
                 </div>
               ) : (
-                <div className="player-grid">
-                  {players.map((p, i) => {
-                    const dup = pickedNames.has(p.name);
-                    return (
-                      <PlayerCard
-                        key={p.id}
-                        player={p}
-                        accent={franchise.colors}
-                        openPositions={p.positions.filter((pos) => roster[pos] === null)}
-                        disabled={dup}
-                        disabledReason={dup ? "Already on your roster" : undefined}
-                        onPick={handlePick}
-                        index={i}
-                      />
-                    );
-                  })}
-                </div>
+                <>
+                  {players.every(
+                    (p) =>
+                      pickedNames.has(p.name) ||
+                      p.positions.every((pos) => roster[pos] !== null),
+                  ) && (
+                    <div className="stuck-banner" role="status">
+                      Nobody here fits your open spot{openPositions.length > 1 ? "s" : ""} —
+                      drag your five around the court to make room
+                      {!skips.franchiseSkipUsed || !skips.decadeSkipUsed ? ", or use a re-spin" : ""}.
+                    </div>
+                  )}
+                  <div className="player-grid">
+                    {players.map((p, i) => {
+                      const dup = pickedNames.has(p.name);
+                      const open = p.positions.filter((pos) => roster[pos] === null);
+                      const disabled = dup || open.length === 0;
+                      return (
+                        <PlayerCard
+                          key={p.id}
+                          player={p}
+                          accent={franchise.colors}
+                          openPositions={open}
+                          disabled={disabled}
+                          disabledReason={
+                            dup
+                              ? "Already on your roster"
+                              : open.length === 0
+                                ? "No open spot — rearrange your court"
+                                : undefined
+                          }
+                          onPick={handlePick}
+                          index={i}
+                        />
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </>
           )}
         </section>
 
         <aside className="draft-side">
-          <Court roster={roster} lastFilled={lastFilled} />
+          <Court roster={roster} lastFilled={lastFilled} onMove={movePlayer} />
           <StrengthMeter roster={roster} />
           <SynergyList roster={roster} compact />
           {mode === "versus" && room && (
@@ -312,30 +360,17 @@ export default function Draft({
         <Modal title={`Slot ${picker.name}`} onClose={() => setPicker(null)}>
           <p className="picker-hint">Pick a position for {picker.name}:</p>
           <div className="picker-list">
-            {openPositions
-              .map((pos) => ({
-                pos,
-                natural: picker.positions.includes(pos),
-                penalty: slotPenalty(picker, pos),
-              }))
-              // Natural slots first; openPositions is already in
-              // PG→C order, and sort() is stable within each group.
-              .sort((a, b) => Number(b.natural) - Number(a.natural))
-              .map(({ pos, natural, penalty }) => (
+            {picker.positions
+              .filter((pos) => roster[pos] === null)
+              .map((pos) => (
                 <button
                   key={pos}
                   type="button"
-                  className={`btn picker-opt ${natural ? "btn-primary" : "btn-secondary"}`}
+                  className="btn btn-primary picker-opt"
                   onClick={() => placePlayer(picker, pos)}
                 >
                   <span className="picker-opt-pos display">{pos}</span>
-                  {natural ? (
-                    <span className="picker-badge mono">natural</span>
-                  ) : (
-                    <span className="picker-cost mono">
-                      out of position −{Math.round(penalty * 100)}%
-                    </span>
-                  )}
+                  <span className="picker-badge mono">natural</span>
                 </button>
               ))}
           </div>

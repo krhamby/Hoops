@@ -2183,3 +2183,75 @@ button.series-game:hover {
   font-size: 0.92rem;
   line-height: 1.55;
 }
+
+/* ============================================================
+   Court drag-and-drop rearranging + lock-in step (v1.4)
+   ============================================================ */
+
+button.court-slot {
+  font: inherit;
+  color: var(--ink);
+  cursor: default;
+}
+.court-editable button.court-slot.slot-filled {
+  cursor: grab;
+}
+.court-editable button.court-slot.slot-filled:active {
+  cursor: grabbing;
+}
+.slot-selected {
+  border-color: var(--orange) !important;
+  background: var(--orange-soft) !important;
+  box-shadow: 0 0 0 3px rgba(255, 122, 24, 0.25);
+}
+.slot-dragover {
+  background: rgba(255, 122, 24, 0.12) !important;
+  border-style: solid !important;
+}
+.slot-hint {
+  font-size: 0.62rem;
+  border-radius: 6px;
+  padding: 0 5px;
+}
+.hint-ok {
+  color: var(--win);
+  background: rgba(39, 209, 122, 0.12);
+}
+.hint-cost {
+  color: var(--loss);
+  background: rgba(255, 77, 90, 0.12);
+}
+.court-tip {
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 0.62rem;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+.lockin-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 42px 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  text-align: center;
+}
+.lockin-title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 900;
+  font-style: italic;
+}
+.lockin-hint {
+  margin: 0;
+  color: var(--ink-dim);
+  max-width: 380px;
+}
