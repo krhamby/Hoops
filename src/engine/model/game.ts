@@ -37,15 +37,34 @@ export interface GameOptions {
   /** Per-team form volatility multiplier (streaky opponents > 1). */
   formSdA?: number;
   formSdB?: number;
+  /**
+   * Track per-player attribution (pts/reb/ast) for box scores.
+   * Off by default: the 82-game season skips it for perf; playoff
+   * series turn it on. Tracking consumes extra rng draws, so the
+   * same seed yields different (but still deterministic) games
+   * with and without it.
+   */
+  box?: boolean;
+}
+
+/** Per-player attribution for one game, indexed by lineup slot. */
+export interface RawBoxLine {
+  pts: number;
+  reb: number;
+  ast: number;
 }
 
 export interface GameScore {
   aScore: number;
   bScore: number;
+  /** Present only when GameOptions.box is set (5 slots, lineup order). */
+  aBox?: RawBoxLine[];
+  bBox?: RawBoxLine[];
 }
 
 const HOME_EDGE = 0.0075; // ±0.75% efficiency each way ≈ +1.5 net pts
-const FATIGUE_PENALTY = 0.02; // -2% efficiency on the back end of a b2b
+const FATIGUE_PENALTY = 0.02; // base b2b efficiency hit, scaled by stamina
+const OT_POSSESSIONS = 9; // ~5-minute overtime period per side
 const FORM_SD = 0.06; // nightly hot/cold per player
 const TEAM_FORM_SD = 0.024; // correlated team-level night (travel, scheme)
 const CLUTCH_WINDOW = 8; // final possessions where stars take over
@@ -60,6 +79,14 @@ interface SideState {
   /** Usage weights for creator selection (playoff mode pre-applied). */
   weights: number[];
   clutchWeights: number[];
+  // ---- box-score attribution (only consulted when tracking) ----
+  /** Offensive / defensive rebound attribution weights. */
+  orbW: number[];
+  drbW: number[];
+  /** Assist attribution weights (playmaking). */
+  astW: number[];
+  /** P(a made basket was assisted), from team passing quality. */
+  assistP: number;
 }
 
 function buildSide(
@@ -85,7 +112,25 @@ function buildSide(
   const clutchWeights = m.players.map(
     (p, i) => weights[i] * (0.5 + 1.1 * p.attrs.clutch),
   );
-  return { m, form, effMul: effMulBase * teamForm, weights, clutchWeights };
+  // Box-score attribution weights. Small epsilons keep the picks
+  // well-defined (≈uniform) even for zero-stat lineups.
+  const orbW = m.players.map((p) => p.attrs.offRebRate + 0.25);
+  const drbW = m.players.map((p) => p.attrs.defRebRate + 0.25);
+  const astW = m.players.map((p) => p.attrs.playmaking + 0.15);
+  // Team passing quality sets how many makes are assisted: an elite
+  // passing network ≈ 70% of FGs, an iso-heavy five ≈ low 40s.
+  const assistP = clamp(0.6 + 5.5 * m.passBoost, 0.42, 0.72);
+  return {
+    m,
+    form,
+    effMul: effMulBase * teamForm,
+    weights,
+    clutchWeights,
+    orbW,
+    drbW,
+    astW,
+    assistP,
+  };
 }
 
 function pickWeighted(rng: RNG, weights: number[]): number {
@@ -99,15 +144,42 @@ function pickWeighted(rng: RNG, weights: number[]): number {
   return weights.length - 1;
 }
 
+/** Per-side stat sheets for the possession to write into. */
+interface BoxTracker {
+  off: RawBoxLine[];
+  def: RawBoxLine[];
+}
+
 /**
  * One offensive possession (incl. putback chains). Returns points.
+ *
+ * When `box` is supplied, every point is attributed to exactly one
+ * offensive player (lines always sum to the team score), rebounds go
+ * to weight-picked players on the boards, and made baskets roll for
+ * an assist among the scorer's four teammates. Attribution consumes
+ * extra rng draws, so tracked and untracked games diverge — each
+ * mode stays fully deterministic per seed.
  */
 function possession(
   off: SideState,
   def: SideState,
   rng: RNG,
   clutch: boolean,
+  box?: BoxTracker,
 ): number {
+  // Assist roll: P(assisted) from team passing quality, credited
+  // among the other four weighted by playmaking (never the scorer).
+  const assist = (scorer: number) => {
+    if (!box) return;
+    if (rng() >= off.assistP) return;
+    const w = off.astW.slice();
+    w[scorer] = 0;
+    box.off[pickWeighted(rng, w)].ast++;
+  };
+  // Defensive board for the side currently defending.
+  const defBoard = () => {
+    if (box) box.def[pickWeighted(rng, def.drbW)].reb++;
+  };
   // --- turnover: own sloppiness vs opponent ball pressure ---
   const toP = clamp(off.m.teamTOBase * def.m.ballPressure, 0.06, 0.24);
   if (rng() < toP) return 0;
@@ -152,6 +224,7 @@ function possession(
   if (rng() < foulP) {
     let pts = 0;
     for (let i = 0; i < shotPts; i++) if (rng() < a.ftSkill) pts++;
+    if (box) box.off[idx].pts += pts;
     return pts;
   }
 
@@ -160,29 +233,49 @@ function possession(
     let pts: number = shotPts;
     // And-1: finishing through contact at the rim.
     if (zone === "rim" && rng() < 0.07 && rng() < a.ftSkill) pts++;
+    if (box) box.off[idx].pts += pts;
+    assist(idx);
     return pts;
   }
 
   // --- offensive rebound -> one putback chance ---
   const orbP = clamp(off.m.offReb * (1.44 - def.m.defReb), 0.1, 0.4);
   if (rng() < orbP) {
+    // Attribute the board (crashers by offensive rebounding weight).
+    let rebIdx = -1;
+    if (box) {
+      rebIdx = pickWeighted(rng, off.orbW);
+      box.off[rebIdx].reb++;
+    }
     const putback = clamp(
       0.55 * off.m.spacing * def.m.oppRimMod * off.effMul,
       0.2,
       0.75,
     );
-    if (rng() < putback) return 2;
+    if (rng() < putback) {
+      // Putback: the rebounder scores it, unassisted.
+      if (box) box.off[rebIdx].pts += 2;
+      return 2;
+    }
     // Second-chance kick-out three for spaced lineups.
     if (off.m.spacing > 1 && rng() < 0.18) {
-      const shooter = off.m.players[pickWeighted(rng, off.weights)];
+      const shooterIdx = pickWeighted(rng, off.weights);
+      const shooter = off.m.players[shooterIdx];
       if (
         shooter.attrs.threeRate > 0 &&
         rng() < threeMakeP(shooter.effEfficiency, shooter.attrs.threeSkill)
       ) {
+        if (box) box.off[shooterIdx].pts += 3;
+        assist(shooterIdx);
         return 3;
       }
     }
+    // Putback chain died -> the defense finally secures it.
+    defBoard();
+    return 0;
   }
+  // Clean miss -> defensive rebound.
+  defBoard();
   return 0;
 }
 
@@ -198,15 +291,31 @@ export function simulateGame(
   const basePoss = ((a.pace + b.pace) / 2) * paceMul;
   const possessions = Math.round(clamp(basePoss + gauss(rng) * 2.6, 90, 106));
 
+  // Back-to-back hit scaled by roster durability: an iron-man five
+  // (stamina ~1) shrugs most of it off, a low-minutes five feels it.
+  const fatigueHit = (m: LineupModel) => {
+    const avgStamina =
+      m.players.reduce((s, p) => s + p.attrs.stamina, 0) / m.players.length;
+    return FATIGUE_PENALTY * clamp(1.7 - avgStamina, 0.6, 1.2);
+  };
   const effA =
     (1 + (opts.home === "a" ? HOME_EDGE : opts.home === "b" ? -HOME_EDGE : 0)) *
-    (opts.fatigueA ? 1 - FATIGUE_PENALTY : 1);
+    (opts.fatigueA ? 1 - fatigueHit(a) : 1);
   const effB =
     (1 + (opts.home === "b" ? HOME_EDGE : opts.home === "a" ? -HOME_EDGE : 0)) *
-    (opts.fatigueB ? 1 - FATIGUE_PENALTY : 1);
+    (opts.fatigueB ? 1 - fatigueHit(b) : 1);
 
   const sideA = buildSide(a, rng, effA, opts.formSdA ?? 1, playoff);
   const sideB = buildSide(b, rng, effB, opts.formSdB ?? 1, playoff);
+
+  // Per-player attribution sheets (box mode only; the season skips
+  // the allocation and the extra rng draws entirely).
+  const newLines = (m: LineupModel): RawBoxLine[] =>
+    m.players.map(() => ({ pts: 0, reb: 0, ast: 0 }));
+  const aBox = opts.box ? newLines(a) : undefined;
+  const bBox = opts.box ? newLines(b) : undefined;
+  const trackA = aBox && bBox ? { off: aBox, def: bBox } : undefined;
+  const trackB = aBox && bBox ? { off: bBox, def: aBox } : undefined;
 
   let aScore = 0;
   let bScore = 0;
@@ -214,15 +323,19 @@ export function simulateGame(
     const left = possessions - i;
     const clutch =
       left <= CLUTCH_WINDOW && Math.abs(aScore - bScore) <= CLUTCH_MARGIN;
-    aScore += possession(sideA, sideB, rng, clutch);
-    bScore += possession(sideB, sideA, rng, clutch);
+    aScore += possession(sideA, sideB, rng, clutch, trackA);
+    bScore += possession(sideB, sideA, rng, clutch, trackB);
   }
 
-  // Overtime: alternate single possessions until the tie breaks.
+  // Overtime: full ~5-minute periods (not sudden death) until the
+  // tie breaks; possessions go clutch whenever the margin is tight.
   while (aScore === bScore) {
-    aScore += possession(sideA, sideB, rng, true);
-    bScore += possession(sideB, sideA, rng, true);
+    for (let i = 0; i < OT_POSSESSIONS; i++) {
+      const clutch = Math.abs(aScore - bScore) <= CLUTCH_MARGIN;
+      aScore += possession(sideA, sideB, rng, clutch, trackA);
+      bScore += possession(sideB, sideA, rng, clutch, trackB);
+    }
   }
 
-  return { aScore, bScore };
+  return aBox && bBox ? { aScore, bScore, aBox, bBox } : { aScore, bScore };
 }

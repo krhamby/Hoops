@@ -68,3 +68,19 @@ Option A take precedence when both are present.
 Create a room in Versus, share the 4-letter code, and draft away. All
 players in a room draft from identical spins (shared seed), and final
 standings are computed locally on every client once everyone submits.
+
+## Migrations
+
+Schema changes now live in [`migrations/`](migrations/) as timestamped SQL
+files (the Supabase GitHub integration / `supabase db push` picks these up
+automatically if you've linked the repo):
+
+| File | What it does |
+|---|---|
+| `20260610200000_initial_schema.sql` | rooms + room_players tables, RLS, realtime |
+| `20260611180000_rematch_rounds.sql` | `rooms.round` + `room_players.crowns` for "Run it back" rematches |
+
+**No GitHub integration?** Just paste the new migration file (or re-run all
+of `schema.sql`, which is kept up to date and idempotent) in the Supabase
+SQL editor. Until the rematch migration is applied, everything works except
+the "Run it back" button, which will show a hint pointing here.

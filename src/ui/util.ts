@@ -1,5 +1,18 @@
 // Small shared helpers for the UI layer.
 
+import type { RoomPlayer } from "../types";
+
+/**
+ * One-line live status for a room player: their record once submitted,
+ * a ✅ while the record is in flight, otherwise live draft progress.
+ */
+export function playerStatus(p: RoomPlayer): string {
+  if (p.roster) {
+    return p.wins !== null && p.losses !== null ? fmtRecord(p.wins, p.losses) : "✅";
+  }
+  return `Pick ${Math.min(p.progress + 1, 5)} of 5`;
+}
+
 /** Human-friendly message from an unknown thrown value. */
 export function errMsg(e: unknown): string {
   if (e instanceof Error) return e.message;

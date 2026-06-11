@@ -14,6 +14,11 @@ import {
   type PlayerAttributes,
 } from "./attributes";
 import { eraContext, REF_PACE } from "./era";
+import {
+  detectSynergyEffects,
+  synergyTotals,
+  SYNERGY_EFF_PER_BOOST,
+} from "./synergy";
 
 const clamp = (x: number, lo: number, hi: number) =>
   Math.min(hi, Math.max(lo, x));
@@ -54,6 +59,9 @@ export interface LineupModel {
   usageDemand: number;
   /** How many real (non-replacement) players are in the lineup. */
   filledSlots: number;
+  /** Applied synergy totals (diagnostics; 0 for raw attribute sets). */
+  synergyOff: number;
+  synergyDef: number;
 }
 
 // ---- usage-efficiency skill curve --------------------------------
@@ -175,6 +183,8 @@ export function lineupFromAttributes(
     expPPG: 0,
     usageDemand,
     filledSlots,
+    synergyOff: 0,
+    synergyDef: 0,
   };
   model.expPPG = expectedPPG(model);
   return model;
@@ -188,7 +198,7 @@ export function buildLineup(roster: Roster): LineupModel {
   for (const pos of POSITIONS) {
     const p = roster[pos];
     if (p) {
-      attrs.push(deriveAttributes(p));
+      attrs.push(deriveAttributes(p, pos));
       paceSum += eraContext(p.decade).pace;
       filled++;
     } else {
@@ -200,6 +210,31 @@ export function buildLineup(roster: Roster): LineupModel {
   // Pace: half league baseline, half the average era the five came
   // from (a 1960s-heavy lineup runs; a 90s-heavy one grinds).
   model.pace = clamp(0.5 * REF_PACE + 0.5 * (paceSum / 5), 88, 110);
+
+  // ---- player synergies (curated duos / familiarity / archetypes) ----
+  // Bounded multipliers: offensive synergy shifts every player's
+  // efficiency a touch (flows through both the analytic expectation
+  // and the possession engine); defensive synergy tightens the
+  // opponent zone modifiers. Totals are clamped in synergyTotals so
+  // the aggregate effect stays within ~±5% and calibration holds.
+  const { off, def } = synergyTotals(detectSynergyEffects(roster));
+  if (off !== 0) {
+    const effDelta = off * SYNERGY_EFF_PER_BOOST;
+    for (const lp of model.players) {
+      lp.effEfficiency = clamp(lp.effEfficiency + effDelta, 0.4, 0.7);
+    }
+  }
+  if (def !== 0) {
+    model.oppRimMod *= 1 - def;
+    model.oppMidMod *= 1 - def;
+    model.oppThreeMod *= 1 - def;
+  }
+  model.synergyOff = off;
+  model.synergyDef = def;
+
+  // expPPG was computed at REF_PACE inside lineupFromAttributes;
+  // refresh it so the rating reflects pace + synergies.
+  model.expPPG = expectedPPG(model);
   return model;
 }
 

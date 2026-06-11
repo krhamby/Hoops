@@ -108,6 +108,41 @@ describe("end-to-end game flow on real data", () => {
     expect(playersFor(newDecade.franchiseId, newDecade.decade).length).toBeGreaterThanOrEqual(5);
   });
 
+  it("team lifeline keeps the era; era lifeline keeps the team", () => {
+    for (let i = 0; i < 25; i++) {
+      const seed = `lifeline-${i}`;
+      const spins = generateSpins(seed);
+      const used = new Set(spins.map((s) => s.franchiseId));
+      for (let idx = 0; idx < spins.length; idx++) {
+        const teamRespin = respinFranchise(seed, spins, idx);
+        expect(teamRespin.franchiseId).not.toBe(spins[idx].franchiseId);
+        // The era is kept whenever any unused franchise can field it
+        // (wheel.ts falls back to a new era only when none can) — so
+        // this assertion tracks the data instead of pinning the
+        // fallback branch as unreachable.
+        const eraCoverable = FRANCHISES.some(
+          (f) =>
+            !used.has(f.id) &&
+            f.decades.includes(spins[idx].decade) &&
+            playersFor(f.id, spins[idx].decade).length >= 5,
+        );
+        if (eraCoverable) {
+          expect(teamRespin.decade, `seed=${seed} idx=${idx} changed era`).toBe(spins[idx].decade);
+        }
+        const eraRespin = respinDecade(seed, spins[idx]);
+        expect(eraRespin.franchiseId).toBe(spins[idx].franchiseId);
+        // A different era is guaranteed only when an alternative exists.
+        const franchise = FRANCHISES.find((f) => f.id === spins[idx].franchiseId)!;
+        const altEras = franchise.decades.filter(
+          (d) => d !== spins[idx].decade && playersFor(franchise.id, d).length >= 5,
+        );
+        if (altEras.length > 0) {
+          expect(eraRespin.decade).not.toBe(spins[idx].decade);
+        }
+      }
+    }
+  });
+
   it("runs a 3-player versus room to standings", () => {
     const roomSeed = "room-ABCD";
     const entries = ["p1", "p2", "p3"].map((id, i) => {
@@ -123,7 +158,7 @@ describe("end-to-end game flow on real data", () => {
         }
       }
       return {
-        player: { id, name: `Player ${i + 1}`, emoji: "🏀", roster: null, wins: null, losses: null },
+        player: { id, name: `Player ${i + 1}`, emoji: "🏀", roster: null, wins: null, losses: null, crowns: 0, progress: 0, left: false },
         roster,
       };
     });

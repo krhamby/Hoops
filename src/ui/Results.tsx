@@ -4,10 +4,11 @@ import { POSITIONS } from "../types";
 import { shareText } from "../engine";
 import { getFranchise } from "../data/franchises";
 import SeasonStrip from "./components/SeasonStrip";
+import SynergyList from "./components/SynergyList";
 import Confetti from "./components/Confetti";
 import { useReducedMotion } from "./useReducedMotion";
 import { useToast } from "./components/Toast";
-import { fmtRecord } from "./util";
+import { fmtRecord, playerStatus } from "./util";
 
 interface ResultsProps {
   mode: GameMode;
@@ -81,8 +82,33 @@ export default function Results({
     }
   }
 
-  const submittedCount = room ? room.players.filter((p) => p.roster).length : 0;
+  const activePlayers = room ? room.players.filter((p) => !p.left) : [];
+  const submittedCount = activePlayers.filter((p) => p.roster).length;
   const roomDone = room?.status === "done";
+
+  // Versus: once everyone is in, auto-advance to the room results so the
+  // showdown is impossible to miss. "Stay here" cancels. The countdown
+  // ticks purely; navigation happens in its own effect when it hits 0.
+  // (onViewRoom is a stable useCallback from App, so room poll
+  // refreshes don't restart the countdown.)
+  const [autoCountdown, setAutoCountdown] = useState<number | null>(null);
+  const [stayHere, setStayHere] = useState(false);
+  const counting =
+    mode === "versus" && roomDone && done && !stayHere && Boolean(onViewRoom);
+  useEffect(() => {
+    if (!counting) {
+      setAutoCountdown(null);
+      return;
+    }
+    setAutoCountdown(5);
+    const id = window.setInterval(() => {
+      setAutoCountdown((c) => (c === null || c <= 0 ? c : c - 1));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [counting]);
+  useEffect(() => {
+    if (counting && autoCountdown === 0) onViewRoom?.();
+  }, [counting, autoCountdown, onViewRoom]);
 
   return (
     <main className={`screen results ${perfect && done ? "results-perfect" : ""}`}>
@@ -137,15 +163,43 @@ export default function Results({
           ) : null}
 
           {mode === "versus" && room && (
-            <div className="versus-wait">
+            <div className={`versus-next ${roomDone ? "versus-next-ready" : ""}`}>
               {roomDone ? (
-                <button type="button" className="btn btn-primary" onClick={onViewRoom}>
-                  View room results →
-                </button>
+                <>
+                  <p className="versus-next-title display">All teams are in. Time for the showdown.</p>
+                  <button type="button" className="btn btn-primary btn-big versus-next-cta" onClick={onViewRoom}>
+                    🏆 See who won →
+                  </button>
+                  {autoCountdown !== null && autoCountdown > 0 && (
+                    <p className="versus-next-count mono">
+                      heading there in {autoCountdown}…{" "}
+                      <button type="button" className="link-btn" onClick={() => setStayHere(true)}>
+                        stay here
+                      </button>
+                    </p>
+                  )}
+                </>
               ) : (
-                <p className="mono">
-                  {submittedCount}/{room.players.length} finished — waiting for the room…
-                </p>
+                <>
+                  <p className="versus-next-title display">
+                    Don't leave yet — the head-to-head starts when everyone finishes.
+                  </p>
+                  <p className="mono versus-next-count">
+                    {submittedCount}/{activePlayers.length} teams in
+                  </p>
+                  <ul className="wait-list">
+                    {activePlayers.map((p) => (
+                      <li key={p.id} className={p.roster ? "wl-done" : ""}>
+                        <span>{p.emoji}</span>
+                        <span className="wl-name">
+                          {p.name}
+                          {p.id === myId ? " (you)" : ""}
+                        </span>
+                        <span className="mono wl-status">{playerStatus(p)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
               )}
             </div>
           )}
@@ -170,6 +224,8 @@ export default function Results({
               );
             })}
           </div>
+
+          <SynergyList roster={roster} />
 
           <div className="rating-bars">
             <RatingBar label="Offense" value={result.rating.offense} pct={ratingPct(result.rating.offense, 95, 135)} fmt={(v) => v.toFixed(1)} />

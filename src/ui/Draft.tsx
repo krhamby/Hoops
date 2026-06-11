@@ -14,7 +14,11 @@ import Wheel from "./components/Wheel";
 import PlayerCard from "./components/PlayerCard";
 import Court from "./components/Court";
 import StrengthMeter from "./components/StrengthMeter";
+import SynergyList from "./components/SynergyList";
 import Modal from "./components/Modal";
+import { useToast } from "./components/Toast";
+import { updateProgress } from "../multiplayer/rooms";
+import { playerStatus } from "./util";
 
 type Phase = "team" | "era" | "pick";
 
@@ -48,9 +52,12 @@ export default function Draft({
     decadeSkipUsed: false,
   });
   const [phase, setPhase] = useState<Phase>("team");
-  const [picker, setPicker] = useState<Player | null>(null);
+  const [picker, setPicker] = useState<{ player: Player; anyPosition: boolean } | null>(null);
   const [lastFilled, setLastFilled] = useState<Position | null>(null);
   const firedRef = useRef(false);
+  // After a team re-spin the era is kept, so the era reel is skipped.
+  const skipEraReelRef = useRef(false);
+  const toast = useToast();
 
   const spin = spins[round];
   const franchise = useMemo(() => getFranchise(spin.franchiseId), [spin.franchiseId]);
@@ -67,12 +74,35 @@ export default function Draft({
     () => POSITIONS.filter((p) => roster[p] === null),
     [roster],
   );
+  const filledCount = POSITIONS.length - openPositions.length;
+
+  // Share live draft progress with the room (best effort — silently
+  // skipped on pre-migration databases or flaky connections).
+  const roomCode = room?.code;
+  useEffect(() => {
+    if (mode !== "versus" || !roomCode) return;
+    updateProgress(roomCode, filledCount).catch(() => {});
+  }, [mode, roomCode, filledCount]);
   const pickedNames = useMemo(
     () =>
       new Set(
         POSITIONS.map((p) => roster[p]?.name).filter((n): n is string => Boolean(n)),
       ),
     [roster],
+  );
+
+  // Soft-lock escape hatch: when nobody in the pool fits an open slot at
+  // their natural position, allow anyone (non-duplicate) to play anywhere.
+  const poolStuck = useMemo(
+    () =>
+      players.length > 0 &&
+      openPositions.length > 0 &&
+      players.every(
+        (p) =>
+          pickedNames.has(p.name) ||
+          p.positions.every((pos) => roster[pos] !== null),
+      ),
+    [players, openPositions, pickedNames, roster],
   );
 
   // Auto-advance to the season sim once all 5 slots are filled.
@@ -96,10 +126,18 @@ export default function Draft({
   }
 
   function handlePick(player: Player) {
+    if (pickedNames.has(player.name)) return;
     const open = player.positions.filter((p) => roster[p] === null);
-    if (open.length === 0) return;
+    if (open.length === 0) {
+      // Out-of-position emergency pick (only when the whole pool is stuck).
+      if (poolStuck && openPositions.length > 0) {
+        if (openPositions.length === 1) placePlayer(player, openPositions[0]);
+        else setPicker({ player, anyPosition: true });
+      }
+      return;
+    }
     if (open.length === 1) placePlayer(player, open[0]);
-    else setPicker(player);
+    else setPicker({ player, anyPosition: false });
   }
 
   function respinTeam() {
@@ -107,12 +145,19 @@ export default function Draft({
     const next = respinFranchise(respinSeed, spins, round);
     setSpins((s) => s.map((sp, i) => (i === round ? next : sp)));
     setSkips((k) => ({ ...k, franchiseSkipUsed: true }));
+    // The team lifeline keeps the era, so don't replay the era reel.
+    skipEraReelRef.current = next.decade === spin.decade;
     setPhase("team");
   }
 
   function respinEra() {
     if (skips.decadeSkipUsed) return;
     const next = respinDecade(respinSeed, spins[round]);
+    if (next.decade === spins[round].decade) {
+      // No alternative era for this franchise — don't burn the lifeline.
+      toast("No other era available for this team — lifeline not used", "error");
+      return;
+    }
     setSpins((s) => s.map((sp, i) => (i === round ? next : sp)));
     setSkips((k) => ({ ...k, decadeSkipUsed: true }));
     setPhase("era");
@@ -183,7 +228,14 @@ export default function Draft({
                 title="Franchise"
                 items={franchiseReelItems}
                 final={{ label: franchise.name, sub: franchise.lineage, colors: franchise.colors }}
-                onLocked={() => setPhase("era")}
+                onLocked={() => {
+                  if (skipEraReelRef.current) {
+                    skipEraReelRef.current = false;
+                    setPhase("pick");
+                  } else {
+                    setPhase("era");
+                  }
+                }}
               />
             </div>
           )}
@@ -220,27 +272,35 @@ export default function Draft({
                   </p>
                 </div>
               ) : (
-                <div className="player-grid">
-                  {players.map((p, i) => {
-                    const open = p.positions.filter((pos) => roster[pos] === null);
-                    const dup = pickedNames.has(p.name);
-                    const disabled = dup || open.length === 0;
-                    return (
-                      <PlayerCard
-                        key={p.id}
-                        player={p}
-                        accent={franchise.colors}
-                        openPositions={open}
-                        disabled={disabled}
-                        disabledReason={
-                          dup ? "Already on your roster" : open.length === 0 ? "No open position" : undefined
-                        }
-                        onPick={handlePick}
-                        index={i}
-                      />
-                    );
-                  })}
-                </div>
+                <>
+                  {poolStuck && (
+                    <div className="stuck-banner" role="status">
+                      No one here plays your open position{openPositions.length > 1 ? "s" : ""} —
+                      emergency rules: anyone can play anywhere this round.
+                    </div>
+                  )}
+                  <div className="player-grid">
+                    {players.map((p, i) => {
+                      const open = p.positions.filter((pos) => roster[pos] === null);
+                      const dup = pickedNames.has(p.name);
+                      const disabled = dup || (open.length === 0 && !poolStuck);
+                      return (
+                        <PlayerCard
+                          key={p.id}
+                          player={p}
+                          accent={franchise.colors}
+                          openPositions={poolStuck && open.length === 0 ? openPositions : open}
+                          disabled={disabled}
+                          disabledReason={
+                            dup ? "Already on your roster" : open.length === 0 && !poolStuck ? "No open position" : undefined
+                          }
+                          onPick={handlePick}
+                          index={i}
+                        />
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </>
           )}
@@ -249,20 +309,23 @@ export default function Draft({
         <aside className="draft-side">
           <Court roster={roster} lastFilled={lastFilled} />
           <StrengthMeter roster={roster} />
+          <SynergyList roster={roster} compact />
           {mode === "versus" && room && (
             <div className="room-mini">
               <div className="room-mini-title">
                 Room <span className="mono">{room.code}</span>
               </div>
               <ul className="room-mini-list">
-                {room.players.map((p) => (
+                {room.players.filter((p) => !p.left).map((p) => (
                   <li key={p.id} className={p.id === myId ? "me" : ""}>
                     <span className="rm-emoji">{p.emoji}</span>
                     <span className="rm-name">
                       {p.name}
                       {p.id === myId ? " (you)" : ""}
                     </span>
-                    <span className="rm-status">{p.roster ? "✅" : "…drafting"}</span>
+                    <span className="rm-status mono">
+                      {p.id === myId ? `Pick ${Math.min(filledCount + 1, 5)} of 5` : playerStatus(p)}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -272,21 +335,24 @@ export default function Draft({
       </div>
 
       {picker && (
-        <Modal title={`Slot ${picker.name}`} onClose={() => setPicker(null)}>
-          <p className="picker-hint">Pick a position for {picker.name}:</p>
+        <Modal title={`Slot ${picker.player.name}`} onClose={() => setPicker(null)}>
+          <p className="picker-hint">
+            Pick a position for {picker.player.name}
+            {picker.anyPosition ? " (out of position — emergency rules)" : ""}:
+          </p>
           <div className="picker-buttons">
-            {picker.positions
-              .filter((pos) => roster[pos] === null)
-              .map((pos) => (
+            {(picker.anyPosition ? openPositions : picker.player.positions.filter((pos) => roster[pos] === null)).map(
+              (pos) => (
                 <button
                   key={pos}
                   type="button"
                   className="btn btn-primary picker-pos"
-                  onClick={() => placePlayer(picker, pos)}
+                  onClick={() => placePlayer(picker.player, pos)}
                 >
                   {pos}
                 </button>
-              ))}
+              ),
+            )}
           </div>
         </Modal>
       )}

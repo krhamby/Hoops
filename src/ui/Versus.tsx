@@ -9,7 +9,8 @@ import {
 import { getIdentity, saveIdentity, type Identity } from "../multiplayer/identity";
 import { createRoom, joinRoom, startRoom } from "../multiplayer/rooms";
 import { useToast } from "./components/Toast";
-import { errMsg } from "./util";
+import Crowns from "./components/Crowns";
+import { errMsg, playerStatus } from "./util";
 
 const EMOJI_CHOICES = ["🏀", "🐐", "🔥", "👟", "🦅", "🐂", "💪", "🎯", "🏆", "⛹️", "🌟", "🧊"];
 
@@ -207,22 +208,24 @@ export default function Versus({ room, onJoined, onLeaveRoom, onHome }: VersusPr
           <div className="room-code-block">
             <span className="room-code-label">Share this with friends</span>
             <div className="room-code display">{room.code}</div>
+            {room.round > 1 && <span className="round-tag mono">Round {room.round}</span>}
             <button type="button" className="btn btn-secondary" onClick={copyCode}>
               {copied ? "Copied!" : "Copy code"}
             </button>
           </div>
 
           <ul className="room-players">
-            {room.players.map((p) => (
+            {room.players.filter((p) => !p.left).map((p) => (
               <li key={p.id} className={p.id === me.id ? "me" : ""}>
                 <span className="rp-emoji">{p.emoji}</span>
                 <span className="rp-name">
                   {p.name}
                   {p.id === me.id ? " (you)" : ""}
                   {p.id === room.hostId ? <span className="host-tag mono"> HOST</span> : null}
+                  <Crowns count={p.crowns} />
                 </span>
                 {room.status !== "lobby" && (
-                  <span className="rp-status">{p.roster ? "✅" : "…"}</span>
+                  <span className="rp-status mono">{playerStatus(p)}</span>
                 )}
               </li>
             ))}

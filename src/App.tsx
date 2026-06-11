@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GameMode, Position, Room, Roster, SeasonResult } from "./types";
 import { POSITIONS } from "./types";
 import { dailySeed, dateKey, simulateSeason } from "./engine";
 import { isConfigured } from "./multiplayer/config";
 import { getIdentity } from "./multiplayer/identity";
-import { fetchRoom, submitResult, subscribeRoom } from "./multiplayer/rooms";
+import { fetchRoom, markLeftRoom, submitResult, subscribeRoom } from "./multiplayer/rooms";
 import Home from "./ui/Home";
 import Draft from "./ui/Draft";
 import Results from "./ui/Results";
@@ -74,14 +74,33 @@ function AppShell() {
     };
   }, [roomCode, toast]);
 
-  // ---- auto-enter the draft when the host starts the room ----
+  // ---- auto-enter the draft when the host starts (or restarts) the room ----
+  // Tracks the room+round this client last drafted in, so a stale
+  // snapshot (e.g. our own submit still in flight) can never bounce us
+  // back into the draft, while a rematch (new round) or a different
+  // room always pulls us in. Cleared when the submit fails (so the
+  // room can pull us back in to retry) and when leaving a room.
+  const draftedKeyRef = useRef<string | null>(null);
+  // Latest room snapshot for callbacks that shouldn't re-create on
+  // every poll refresh (a new identity would reset timers downstream).
+  const roomRef = useRef<Room | null>(null);
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
+
   const screenName = screen.name;
   useEffect(() => {
-    if (!room || screenName !== "versus") return;
+    if (!room) return;
+    const reactive =
+      screenName === "versus" ||
+      screenName === "versusResults" ||
+      screenName === "results";
+    if (!reactive) return;
     if (room.status === "drafting") {
       const me = getIdentity();
       const mine = room.players.find((p) => p.id === me.id);
-      if (mine && !mine.roster) {
+      const draftKey = `${room.code}:${room.round}`;
+      if (mine && !mine.roster && draftedKeyRef.current !== draftKey) {
         setSession({
           mode: "versus",
           spinSeed: room.seed,
@@ -91,7 +110,7 @@ function AppShell() {
         setAttempt((a) => a + 1);
         setScreen({ name: "draft" });
       }
-    } else if (room.status === "done") {
+    } else if (room.status === "done" && screenName === "versus") {
       setScreen({ name: "versusResults" });
     }
   }, [room, screenName]);
@@ -117,8 +136,21 @@ function AppShell() {
   }, [todayKey]);
 
   const leaveRoom = useCallback(() => {
+    // Mark our row as departed so the room's "everyone submitted?"
+    // checks and future rematch rounds don't wait on a ghost.
+    const code = roomRef.current?.code;
+    if (code) {
+      markLeftRoom(code).catch(() => {
+        // Best effort — an unreachable network just leaves the row.
+      });
+    }
+    draftedKeyRef.current = null;
     setRoomCode(null);
     setRoom(null);
+  }, []);
+
+  const viewRoomResults = useCallback(() => {
+    setScreen({ name: "versusResults" });
   }, []);
 
   // ---- draft completion: simulate + persist/submit ----
@@ -133,12 +165,17 @@ function AppShell() {
       }
 
       if (session.mode === "versus" && roomCode) {
+        const draftKey = `${roomCode}:${roomRef.current?.round ?? 1}`;
+        draftedKeyRef.current = draftKey;
         const ids = {} as Record<Position, string>;
         for (const pos of POSITIONS) {
           const p = roster[pos];
           if (p) ids[pos] = p.id;
         }
         submitResult(roomCode, ids, result.wins, result.losses).catch((e) => {
+          // Re-arm the auto-enter guard so the room can pull this
+          // client back into the draft to retry the submission.
+          if (draftedKeyRef.current === draftKey) draftedKeyRef.current = null;
           toast(`Couldn't submit your season to the room: ${errMsg(e)}`, "error");
         });
       }
@@ -208,7 +245,7 @@ function AppShell() {
             if (session.mode === "versus") leaveRoom();
             goHome();
           }}
-          onViewRoom={() => setScreen({ name: "versusResults" })}
+          onViewRoom={viewRoomResults}
         />
       );
 

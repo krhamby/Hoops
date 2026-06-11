@@ -82,17 +82,3 @@ begin
     when duplicate_object then null;
   end;
 end $$;
-
--- ---------------- Rematch rounds (migration 20260611180000) ----------------
-
-alter table public.rooms
-  add column if not exists round int not null default 1;
-
-alter table public.room_players
-  add column if not exists crowns int not null default 0;
-
-alter table public.room_players
-  add column if not exists progress int not null default 0;
-
-alter table public.room_players
-  add column if not exists left_at timestamptz;

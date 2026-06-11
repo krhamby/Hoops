@@ -120,9 +120,25 @@ const FT_POS: Record<Position, number> = {
   C: 0.67,
 };
 
-/** Derive latent attributes from a player's era-adjusted stat line. */
-export function deriveAttributes(p: Player): PlayerAttributes {
-  const pos = p.positions[0] ?? "SF";
+// Defensive reputation in accolade text. Counting stats miss elite
+// defenders (and pre-1974 stl/blk are estimates), so recognized
+// stoppers/anchors get a bump. Deliberately narrow: bare "steal" /
+// "block" / "rim" would false-positive on "second-round steal",
+// "building block", "rim-rocking" etc.; "stopper" needs a word
+// boundary so "showstopper" doesn't count as defense.
+const DEF_ACCOLADE =
+  /dpoy|all-def|defen[dcs]|\bstopper|lockdown|rim (protector|wall|guard|deterrent)|shot.?block|steals? (champ|leader|king|machine)/i;
+
+/**
+ * Derive latent attributes from a player's era-adjusted stat line.
+ * `slot` is the roster position the player is actually slotted at;
+ * when he is eligible there it drives the positional role weights
+ * (a SF/PF slotted at PF defends/rebounds like a PF). Falls back to
+ * his primary position.
+ */
+export function deriveAttributes(p: Player, slot?: Position): PlayerAttributes {
+  const pos =
+    slot && p.positions.includes(slot) ? slot : p.positions[0] ?? "SF";
   const ctx = eraContext(p.decade);
 
   // Era-normalized inputs.
@@ -137,18 +153,26 @@ export function deriveAttributes(p: Player): PlayerAttributes {
   const usage = clamp(0.1 + 0.0085 * adjPts + 0.0018 * adjAst, 0.1, 0.4);
 
   // Scoring efficiency (TS%-like):
-  //  - modern shooting environments lift everyone (+threeEnv),
   //  - low-volume bigs live on dunks/putbacks (+ when usage is small),
   //  - elite scorers were elite *because* they scored efficiently at
   //    volume: a convex selection curve (adjPts^1.5) — sustaining 25+
   //    adjusted ppg requires outlier shotmaking, while the difference
   //    between 8 and 12 ppg role players is mostly opportunity.
+  // NOTE: deliberately no era-environment term here. Attributes live
+  // in the reference context and the era's scoring environment is
+  // already priced into adjustedScoring — adding threeEnv again
+  // double-penalized pre-1980 players.
   const bigBonus =
     pos === "C" || pos === "PF"
       ? 0.045 * (1 - clamp01((usage - 0.1) / 0.2))
       : 0;
+  // Pre-3PT craft: translated old-era scorers bring a polished
+  // close-quarters game into a reference era whose rules (spacing,
+  // no hand-checking) flatter it. Keeps all-pre-1980 lineups
+  // competitive instead of strictly dominated in cross-era play.
+  const craftBonus = ctx.threeEnv === 0 ? 0.012 : 0;
   const scoringEfficiency = clamp(
-    0.5 + 0.025 * ctx.threeEnv + 0.00155 * Math.pow(adjPts, 1.5) + bigBonus,
+    0.515 + 0.00155 * Math.pow(adjPts, 1.5) + bigBonus + craftBonus,
     0.46,
     0.68,
   );
@@ -159,8 +183,13 @@ export function deriveAttributes(p: Player): PlayerAttributes {
     ctx.threeEnv === 0
       ? 0
       : clamp(ctx.threeEnv * (0.1 + 0.3 * THREE_POS[pos]), 0, 0.55);
-  // Shooting threes pulls some attempts away from the rim.
-  const rimRate = clamp(RIM_BASE[pos] * (1 - 0.55 * threeRate), 0.12, 0.65);
+  // Shooting threes pulls some attempts away from the rim. Pre-3PT
+  // players translate the other way: with no line to honor, their
+  // attempt mix concentrated at the basket (post play, cuts, short
+  // pull-ups) — without this shift the model parks 60%+ of their
+  // attempts in its lowest-value long-two zone, an era artifact.
+  const rimBase = ctx.threeEnv === 0 ? RIM_BASE[pos] + 0.1 : RIM_BASE[pos];
+  const rimRate = clamp(rimBase * (1 - 0.55 * threeRate), 0.12, 0.65);
   const midRate = Math.max(0, 1 - threeRate - rimRate);
 
   // Three-point make quality: era environment + guard/wing touch +
@@ -188,8 +217,14 @@ export function deriveAttributes(p: Player): PlayerAttributes {
   const defRebRate = adjReb * DREB_POS[pos];
 
   // Defense.
-  const rimProtection = clamp01(adjBlk * RIMPROT_POS[pos] + 0.02);
-  const perimeterDefense = clamp01(adjStl * PERIM_POS[pos] + 0.02);
+  let rimProtection = clamp01(adjBlk * RIMPROT_POS[pos] + 0.02);
+  let perimeterDefense = clamp01(adjStl * PERIM_POS[pos] + 0.02);
+  if (p.accolades && DEF_ACCOLADE.test(p.accolades)) {
+    // Reputation bump, position-shaped: anchors gain rim deterrence,
+    // guards gain point-of-attack pressure.
+    rimProtection = clamp01(rimProtection + 0.35 * RIMPROT_POS[pos]);
+    perimeterDefense = clamp01(perimeterDefense + 0.35 * PERIM_POS[pos]);
+  }
 
   // Free throws: rim pressure + load draw fouls; touch by position
   // plus a scorer bonus (great scorers are great FT shooters).

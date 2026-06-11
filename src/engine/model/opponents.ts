@@ -9,7 +9,7 @@
 import { POSITIONS, type GameResult, type Position } from "../../types";
 import { createRng, shuffle, type RNG } from "../rng";
 import { deriveAttributes, type PlayerAttributes } from "./attributes";
-import { lineupFromAttributes, type LineupModel } from "./lineup";
+import { expectedPPG, lineupFromAttributes, type LineupModel } from "./lineup";
 
 export type Tier = GameResult["opponentTier"];
 
@@ -26,6 +26,7 @@ export interface ScheduledGame {
   opponentIndex: number; // into League.teams
   home: boolean; // true = our building
   backToBack: boolean; // we are on the second night
+  oppBackToBack: boolean; // the opponent is on the second night
 }
 
 export interface League {
@@ -84,7 +85,9 @@ const TIER_TEMPLATES: Record<Tier, Line[]> = {
 
 // NPC scoring handicap: the drafted roster is built from all-time
 // legends, so the NPC league plays at normal-mortal scoring talent.
-const NPC_PTS_SCALE = 0.82;
+// (Calibration knob: keeps the superteam 82-0 rate in the 8-20%
+// design window.)
+const NPC_PTS_SCALE = 0.81;
 
 /** Synthesize an opponent's five attribute sets from its archetype. */
 function opponentAttributes(tier: Tier, rng: RNG): PlayerAttributes[] {
@@ -125,6 +128,7 @@ export function generateLeague(seed: string): League {
       const lineup = lineupFromAttributes(opponentAttributes(tier, rng));
       // Pace personality: some teams run, some grind.
       lineup.pace = 95 + rng() * 10;
+      lineup.expPPG = expectedPPG(lineup); // refresh after pace change
       teams.push({ tier, lineup, formSd: 0.8 + rng() * 0.6 });
     }
   }
@@ -158,8 +162,10 @@ export function generateLeague(seed: string): League {
       tier,
       opponentIndex: pool[Math.floor(rng() * pool.length)],
       home: homeFlags[g],
-      // ~15% of games land on the second night of a back-to-back.
+      // ~15% of games land on the second night of a back-to-back —
+      // for us, and independently for the night's opponent.
       backToBack: rng() < 0.15,
+      oppBackToBack: rng() < 0.15,
     });
   }
 

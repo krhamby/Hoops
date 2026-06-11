@@ -20,6 +20,8 @@ interface RoomRow {
   status: RoomStatus;
   host_id: string;
   created_at: string;
+  /** Absent until the rematch_rounds migration has been applied. */
+  round?: number | null;
 }
 
 interface RoomPlayerRow {
@@ -31,6 +33,15 @@ interface RoomPlayerRow {
   wins: number | null;
   losses: number | null;
   joined_at: string;
+  /** Absent until the rematch_rounds migration has been applied. */
+  crowns?: number | null;
+  progress?: number | null;
+  left_at?: string | null;
+}
+
+/** PostgREST "column does not exist" — the migration isn't applied yet. */
+function isMissingColumn(error: { code?: string } | null): boolean {
+  return error?.code === "42703" || error?.code === "PGRST204";
 }
 
 // ---------------- Helpers ----------------
@@ -76,6 +87,9 @@ function mapPlayer(row: RoomPlayerRow): RoomPlayer {
     roster: row.roster ?? null,
     wins: row.wins ?? null,
     losses: row.losses ?? null,
+    crowns: row.crowns ?? 0,
+    progress: row.progress ?? 0,
+    left: row.left_at != null,
   };
 }
 
@@ -89,6 +103,7 @@ function mapRoom(roomRow: RoomRow, playerRows: RoomPlayerRow[]): Room {
     status: roomRow.status,
     hostId: roomRow.host_id,
     createdAt: roomRow.created_at,
+    round: roomRow.round ?? 1,
     players: sorted.map(mapPlayer),
   };
 }
@@ -117,6 +132,36 @@ async function fetchRoomWithClient(
   }
 
   return mapRoom(roomRow as RoomRow, (playerRows ?? []) as RoomPlayerRow[]);
+}
+
+/**
+ * Upsert only identity/liveness columns so a (re-)join never clobbers
+ * a previously submitted roster/record, and always reactivates a row
+ * that was marked as departed. Falls back to the pre-migration column
+ * set when left_at doesn't exist yet. Returns an error message or null.
+ */
+async function seatPlayer(
+  client: SupabaseClient,
+  code: string,
+  identity: { id: string; name: string; emoji: string }
+): Promise<string | null> {
+  const base = {
+    room_code: code,
+    player_id: identity.id,
+    name: identity.name,
+    emoji: identity.emoji,
+  };
+  const { error } = await client
+    .from("room_players")
+    .upsert({ ...base, left_at: null }, { onConflict: "room_code,player_id" });
+  if (!error) return null;
+  if (isMissingColumn(error)) {
+    const { error: retryError } = await client
+      .from("room_players")
+      .upsert(base, { onConflict: "room_code,player_id" });
+    return retryError ? retryError.message : null;
+  }
+  return error.message;
 }
 
 // ---------------- Public API ----------------
@@ -154,17 +199,9 @@ export async function createRoom(): Promise<Room> {
     throw new Error("Could not create room: ran out of code attempts");
   }
 
-  const { error: playerError } = await client.from("room_players").upsert(
-    {
-      room_code: code,
-      player_id: identity.id,
-      name: identity.name,
-      emoji: identity.emoji,
-    },
-    { onConflict: "room_code,player_id" }
-  );
+  const playerError = await seatPlayer(client, code, identity);
   if (playerError) {
-    throw new Error(`Could not join created room: ${playerError.message}`);
+    throw new Error(`Could not join created room: ${playerError}`);
   }
 
   const room = await fetchRoomWithClient(client, code);
@@ -195,18 +232,8 @@ export async function joinRoom(code: string): Promise<Room> {
     );
   }
 
-  // Upsert only identity columns so a re-join never clobbers a
-  // previously submitted roster/record.
-  const { error } = await client.from("room_players").upsert(
-    {
-      room_code: normalized,
-      player_id: identity.id,
-      name: identity.name,
-      emoji: identity.emoji,
-    },
-    { onConflict: "room_code,player_id" }
-  );
-  if (error) throw new Error(`Could not join room: ${error.message}`);
+  const seatError = await seatPlayer(client, normalized, identity);
+  if (seatError) throw new Error(`Could not join room: ${seatError}`);
 
   const joined = await fetchRoomWithClient(client, normalized);
   if (!joined) {
@@ -253,19 +280,33 @@ export async function submitResult(
     .eq("player_id", identity.id);
   if (error) throw new Error(`Could not submit result: ${error.message}`);
 
-  // If everyone has submitted, close out the room.
-  const { data: playerRows, error: playersError } = await client
-    .from("room_players")
-    .select("roster, wins, losses")
-    .eq("room_code", normalized);
+  // If everyone (who hasn't left) has submitted, close out the room.
+  type SubmissionRow = Pick<RoomPlayerRow, "roster" | "wins" | "losses"> & {
+    left_at?: string | null;
+  };
+  let playerRows: SubmissionRow[] | null = null;
+  let playersError: { code?: string; message: string } | null = null;
+  {
+    const res = await client
+      .from("room_players")
+      .select("roster, wins, losses, left_at")
+      .eq("room_code", normalized);
+    playerRows = res.data as SubmissionRow[] | null;
+    playersError = res.error;
+  }
+  if (playersError && isMissingColumn(playersError)) {
+    const res = await client
+      .from("room_players")
+      .select("roster, wins, losses")
+      .eq("room_code", normalized);
+    playerRows = res.data as SubmissionRow[] | null;
+    playersError = res.error;
+  }
   if (playersError) {
     throw new Error(`Could not check submissions: ${playersError.message}`);
   }
 
-  const rows = (playerRows ?? []) as Pick<
-    RoomPlayerRow,
-    "roster" | "wins" | "losses"
-  >[];
+  const rows = (playerRows ?? []).filter((r) => r.left_at == null);
   const allSubmitted =
     rows.length > 0 &&
     rows.every((r) => r.roster != null && r.wins != null && r.losses != null);
@@ -278,6 +319,130 @@ export async function submitResult(
     if (doneError) {
       throw new Error(`Could not finish room: ${doneError.message}`);
     }
+  }
+}
+
+/**
+ * Host action: run it back. Awards the finished round's champion a
+ * crown, wipes every player's roster/record, rolls a fresh shared
+ * seed, bumps the round counter, and drops the whole room straight
+ * back into "drafting". All clients react via their subscription.
+ *
+ * Requires the rematch_rounds migration (rooms.round,
+ * room_players.crowns) — throws a friendly hint otherwise.
+ */
+export async function rematchRoom(
+  code: string,
+  championId: string | null
+): Promise<void> {
+  const client = requireClient();
+  const normalized = normalizeCode(code);
+
+  const migrationHint =
+    "Rematch needs the latest database migration — run supabase/migrations/20260611180000_rematch_rounds.sql on your Supabase project.";
+  const describe = (action: string, error: { code?: string; message: string }) =>
+    isMissingColumn(error)
+      ? new Error(migrationHint)
+      : new Error(`${action}: ${error.message}`);
+
+  const { data: roomRow, error: roomError } = await client
+    .from("rooms")
+    .select("round, status")
+    .eq("code", normalized)
+    .maybeSingle();
+  if (roomError) throw describe("Could not start the rematch", roomError);
+  if (!roomRow) throw new Error(`Room "${normalized}" was not found.`);
+  const current = roomRow as { round: number | null; status: RoomStatus };
+  const currentRound = current.round ?? 1;
+
+  // Commit point: flip the room first, guarded so exactly one client
+  // performs the done -> drafting transition for this round (a retry
+  // after a partial failure, or a double-click, can't re-transition).
+  // Clients never see "done with wiped rosters", which previously
+  // flashed an error screen.
+  const { data: flipped, error: flipError } = await client
+    .from("rooms")
+    .update({
+      seed: randomSeed(),
+      status: "drafting" satisfies RoomStatus,
+      round: currentRound + 1,
+    })
+    .eq("code", normalized)
+    .eq("status", "done" satisfies RoomStatus)
+    .eq("round", currentRound)
+    .select("code");
+  if (flipError) throw describe("Could not start the rematch", flipError);
+  const wonTransition = (flipped?.length ?? 0) > 0;
+
+  // Reset players for the new round. Idempotent — also runs on a
+  // retry that lost the transition race, recovering a half-applied
+  // rematch. The crown is awarded only by the transition winner so a
+  // retry can never double-crown the champion.
+  const resetPlayers = async () => {
+    const { error } = await client
+      .from("room_players")
+      .update({ roster: null, wins: null, losses: null, progress: 0 })
+      .eq("room_code", normalized);
+    if (error) throw describe("Could not reset the room", error);
+  };
+  const awardCrown = async () => {
+    if (!wonTransition || !championId) return;
+    const { data: champRow, error: readError } = await client
+      .from("room_players")
+      .select("crowns")
+      .eq("room_code", normalized)
+      .eq("player_id", championId)
+      .maybeSingle();
+    if (readError) throw describe("Could not award the crown", readError);
+    const crowns = ((champRow as { crowns: number | null } | null)?.crowns ?? 0) + 1;
+    const { error } = await client
+      .from("room_players")
+      .update({ crowns })
+      .eq("room_code", normalized)
+      .eq("player_id", championId);
+    if (error) throw describe("Could not award the crown", error);
+  };
+  await Promise.all([resetPlayers(), awardCrown()]);
+}
+
+/**
+ * Mark the local player as having left the room. Their row is kept
+ * (finished-round standings stay intact) but waits and rematches skip
+ * them. Re-joining with the same identity reactivates the row.
+ * No-op on databases without the rematch_rounds migration.
+ */
+export async function markLeftRoom(code: string): Promise<void> {
+  const client = requireClient();
+  const identity = getIdentity();
+  const { error } = await client
+    .from("room_players")
+    .update({ left_at: new Date().toISOString() })
+    .eq("room_code", normalizeCode(code))
+    .eq("player_id", identity.id);
+  if (error && !isMissingColumn(error)) {
+    throw new Error(`Could not leave the room: ${error.message}`);
+  }
+}
+
+/**
+ * Report live draft progress (picks made this round, 0-5) so the rest
+ * of the room sees "Pick N of 5" instead of a generic spinner.
+ * Best-effort: silently a no-op on pre-migration databases.
+ */
+export async function updateProgress(
+  code: string,
+  progress: number
+): Promise<void> {
+  const client = requireClient();
+  const identity = getIdentity();
+  const clamped = Math.max(0, Math.min(5, Math.round(progress)));
+  const { error } = await client
+    .from("room_players")
+    .update({ progress: clamped })
+    .eq("room_code", normalizeCode(code))
+    .eq("player_id", identity.id);
+  if (error && !isMissingColumn(error)) {
+    throw new Error(`Could not update progress: ${error.message}`);
   }
 }
 

@@ -1205,11 +1205,6 @@ h3 {
   position: relative;
 }
 
-.versus-wait {
-  text-align: center;
-  color: var(--ink-dim);
-}
-
 /* ---------- roster recap ---------- */
 .roster-recap {
   display: grid;
@@ -1582,56 +1577,9 @@ input::placeholder {
   font-size: 0.86rem;
 }
 
-.standings-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.standings-table th,
-.standings-table td {
-  text-align: left;
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--line);
-}
-
-.standings-table th {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--ink-faint);
-  background: var(--panel-2);
-}
-
-.standings-table tr.me td {
-  background: var(--orange-soft);
-}
-
-.standings-player {
-  background: none;
-  border: none;
-  color: var(--ink);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 0;
-}
-
 .caret {
   color: var(--ink-faint);
   font-size: 0.8em;
-}
-
-.roster-row td {
-  background: var(--panel-2);
-}
-
-.roster-line {
-  font-size: 0.74rem;
-  color: var(--ink-dim);
 }
 
 .series-list {
@@ -1842,3 +1790,325 @@ input::placeholder {
     flex-direction: column;
   }
 }
+
+/* ============================================================
+   Versus flow emphasis + draft emergency rules (v1.1)
+   ============================================================ */
+
+/* --- prominent "what happens next" panel on the results screen --- */
+.versus-next {
+  margin: 18px auto 6px;
+  max-width: 560px;
+  padding: 18px 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  text-align: center;
+}
+.versus-next-ready {
+  border-color: var(--orange);
+  background: linear-gradient(160deg, var(--orange-soft), var(--panel-2) 65%);
+  animation: next-pulse 1.6s ease-in-out infinite;
+}
+@keyframes next-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 122, 24, 0.35); }
+  50% { box-shadow: 0 0 0 12px rgba(255, 122, 24, 0); }
+}
+.versus-next-title {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-style: italic;
+}
+.versus-next-count {
+  margin: 10px 0 0;
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+}
+.btn-big {
+  font-size: 1.15rem;
+  padding: 14px 28px;
+}
+.versus-next-cta {
+  width: 100%;
+}
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ink-dim);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+.link-btn:hover { color: var(--ink); }
+
+.wait-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+.wait-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  opacity: 0.75;
+}
+.wait-list li.wl-done {
+  opacity: 1;
+  border-color: rgba(39, 209, 122, 0.45);
+}
+.wl-name { flex: 1; font-weight: 600; }
+.wl-status { color: var(--ink-dim); font-size: 0.8rem; }
+.wl-done .wl-status { color: var(--win); }
+
+/* --- draft emergency rules banner --- */
+.stuck-banner {
+  margin: 0 0 14px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px dashed var(--gold);
+  background: rgba(255, 209, 102, 0.08);
+  color: var(--gold);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* --- versus standings: full teams, always visible --- */
+.standings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 10px 0 26px;
+}
+.team-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 14px 16px;
+}
+.team-card.me { border-color: var(--line-strong); }
+.team-card-champ {
+  border-color: var(--gold);
+  background: linear-gradient(165deg, rgba(255, 209, 102, 0.1), var(--panel) 60%);
+}
+.team-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.team-rank { font-size: 1.05rem; min-width: 2ch; }
+.team-owner { font-weight: 800; font-size: 1.05rem; flex: 1; }
+.team-records { color: var(--ink-dim); font-size: 0.82rem; }
+.team-five {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.five-chip {
+  --c1: var(--panel-2);
+  --c2: var(--line);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--c1);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.five-pos {
+  font-size: 0.66rem;
+  color: var(--ink-faint);
+  letter-spacing: 0.08em;
+}
+.five-name {
+  font-weight: 700;
+  font-size: 0.86rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.five-meta {
+  font-size: 0.68rem;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+@media (max-width: 860px) {
+  .team-five { grid-template-columns: repeat(2, 1fr); }
+  .five-chip:last-child { grid-column: span 2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .versus-next-ready { animation: none; }
+}
+
+/* --- rematch (run it back) --- */
+.round-tag {
+  font-size: 0.8rem;
+  color: var(--ink-dim);
+  font-style: normal;
+}
+.crowns {
+  color: var(--gold);
+  font-size: 0.82em;
+}
+.rematch-actions {
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.rematch-wait {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  text-align: center;
+  max-width: 420px;
+}
+
+/* ============================================================
+   Playoffs: box scores, qualification cut, no-champion (v1.2)
+   ============================================================ */
+
+.playoff-bar-note {
+  margin: 0 0 4px;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  text-align: center;
+}
+.team-card-missed {
+  opacity: 0.72;
+  border-style: dashed;
+}
+.missed-tag {
+  color: var(--loss);
+}
+.champion-banner.no-champion {
+  border-color: var(--line-strong);
+  background: var(--panel-2);
+}
+
+.series-game-block {
+  display: flex;
+  flex-direction: column;
+}
+button.series-game {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+button.series-game:hover {
+  border-color: var(--line);
+  background: var(--panel-2);
+}
+.sg-box-hint {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+}
+
+.box-scores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 10px 6px 14px;
+}
+@media (max-width: 700px) {
+  .box-scores { grid-template-columns: 1fr; }
+}
+.box-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 0.8rem;
+}
+.box-caption {
+  caption-side: top;
+  text-align: left;
+  padding: 8px 10px 6px;
+  font-weight: 700;
+}
+.box-table th,
+.box-table td {
+  text-align: left;
+  padding: 5px 10px;
+  border-top: 1px solid var(--line);
+}
+.box-table th {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+}
+.box-table th.mono,
+.box-table td.mono {
+  text-align: right;
+  width: 3.2em;
+}
+.box-pos {
+  color: var(--ink-faint);
+  font-size: 0.7em;
+}
+
+/* --- on-court chemistry (synergies) --- */
+.synergy-list {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  text-align: left;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.results .synergy-list { margin: 18px auto 0; }
+.synergy-title {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+  margin-bottom: 8px;
+}
+.synergy-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.synergy-list li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.syn-sign { font-size: 0.7rem; }
+.syn-pos .syn-sign { color: var(--win); }
+.syn-neg .syn-sign { color: var(--loss); }
+.syn-label { font-weight: 700; font-size: 0.85rem; }
+.syn-players { color: var(--ink-dim); font-weight: 400; }
+.syn-detail {
+  display: block;
+  color: var(--ink-dim);
+  font-size: 0.78rem;
+  margin-top: 1px;
+}
+.synergy-compact .syn-label { font-size: 0.78rem; }
+.synergy-compact ul { gap: 5px; }

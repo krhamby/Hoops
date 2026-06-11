@@ -27,6 +27,7 @@ export function simulateSeason(roster: Roster, seed: string): SeasonResult {
     const { aScore, bScore } = simulateGame(lineup, opp.lineup, rng, {
       home: g.home ? "a" : "b",
       fatigueA: g.backToBack,
+      fatigueB: g.oppBackToBack,
       formSdB: opp.formSd,
     });
 

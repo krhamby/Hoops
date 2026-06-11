@@ -39,17 +39,30 @@ export function generateSpins(seed: string, count = 5): Spin[] {
 
 /**
  * Respin the franchise at `index`: returns a new spin whose franchise is
- * not already used by any spin in `spins`. Deterministic for a given
- * seed + spins + index.
+ * not already used by any spin in `spins`. The current decade is KEPT
+ * whenever the new franchise has enough players in it — the team
+ * lifeline changes the team, not the era. Falls back to a random valid
+ * decade only when no unused franchise can field the era. Deterministic
+ * for a given seed + spins + index.
  */
 export function respinFranchise(seed: string, spins: Spin[], index: number): Spin {
   const fingerprint = spins.map((s) => `${s.franchiseId}.${s.decade}`).join(",");
   const rng = createRng(`${seed}:respin-franchise:${index}:${fingerprint}`);
+  const keepDecade = spins[index]?.decade;
   const used = new Set(spins.map((s) => s.franchiseId));
   const candidates = shuffle(
     rng,
     FRANCHISES.filter((f) => !used.has(f.id)),
   );
+  // First pass: franchises that can field the existing era.
+  if (keepDecade) {
+    for (const franchise of candidates) {
+      if (validDecades(franchise).includes(keepDecade)) {
+        return { franchiseId: franchise.id, decade: keepDecade };
+      }
+    }
+  }
+  // Fallback: any unused franchise with any valid decade.
   for (const franchise of candidates) {
     const decades = validDecades(franchise);
     if (decades.length === 0) continue;

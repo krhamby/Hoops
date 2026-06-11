@@ -82,6 +82,21 @@ export interface SkipState {
 
 // ---------------- Simulation ----------------
 
+/**
+ * A detected player-synergy on a roster (curated legendary duo,
+ * real-teammates familiarity, or archetype fit). `players` holds
+ * display names; `boost` is a signed scalar normalized as a fraction
+ * of team efficiency (±0.003 faint .. ±0.02 strong) so the UI can
+ * render +/- intensity directly.
+ */
+export interface Synergy {
+  id: string;
+  label: string;
+  detail: string;
+  players: string[];
+  boost: number;
+}
+
 export interface TeamRating {
   offense: number; // ~ expected points per game
   defense: number; // points prevented modifier
@@ -106,10 +121,23 @@ export interface SeasonResult {
   firstLoss: number | null;
 }
 
+/** One player's line in a playoff box score. */
+export interface BoxLine {
+  name: string;
+  pos: Position;
+  pts: number;
+  reb: number;
+  ast: number;
+}
+
 export interface SeriesGame {
   gameNo: number;
   aScore: number;
   bScore: number;
+  /** Per-player box scores in PG,SG,SF,PF,C slot order. Always present:
+   *  SeriesGame is never persisted, only recomputed from rosters. */
+  aBox: BoxLine[];
+  bBox: BoxLine[];
 }
 
 export interface SeriesResult {
@@ -131,14 +159,22 @@ export interface RoomPlayer {
   roster: Record<Position, string> | null;
   wins: number | null; // season result, filled after submit
   losses: number | null;
+  /** Room titles won in previous rounds of this room. */
+  crowns: number;
+  /** Picks made in the current round (0-5), for live draft progress. */
+  progress: number;
+  /** Explicitly left the room; ignored by waits and rematches. */
+  left: boolean;
 }
 
 export interface Room {
   code: string; // 4-letter join code
-  seed: string; // shared seed -> identical spins for all players
+  seed: string; // shared seed -> identical spins for all players (re-rolled each round)
   status: RoomStatus;
   hostId: string;
   createdAt: string;
+  /** Rematch counter: 1 for the first game, +1 per "run it back". */
+  round: number;
   players: RoomPlayer[];
 }
 
@@ -148,4 +184,6 @@ export interface StandingsEntry {
   seasonLosses: number;
   h2hWins: number; // series wins in the room round-robin
   rank: number;
+  /** Finished at/above the playoff bar (see PLAYOFF_BAR) and played the round-robin. */
+  qualified: boolean;
 }
